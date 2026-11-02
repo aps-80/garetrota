@@ -2038,15 +2038,18 @@ function adattaAllaPagina(html){
     Array.from(rs).forEach(r=>{ if(r.media && /print/.test(r.media.mediaText)) Array.from(r.cssRules).forEach(x=>{ regole += x.cssText + '\n'; }); }); });
   const st = document.createElement('style'); st.textContent = regole; document.head.appendChild(st);
   area.style.width = p.w + 'mm';
-  const max = p.h * 96 / 25.4;
+  const max = p.h * 96 / 25.4, larga = p.w * 96 / 25.4;
   area.querySelectorAll(UNA_PAGINA).forEach(el=>{
     if(el.parentElement.closest(UNA_PAGINA)) return;
     el.style.zoom = '';
     // altezza con i margini, più un 5% di scorta: in stampa le righe vanno a capo in modo un po' diverso
     const cs = getComputedStyle(el), h = el.getBoundingClientRect().height + parseFloat(cs.marginTop) + parseFloat(cs.marginBottom);
     const z = max / h * 0.95;
-    if(z < 1 && z >= 0.75) el.style.zoom = z.toFixed(3);
-    if(z < 0.75) ciSta = false;
+    // fogli orizzontali anche in larghezza: con i caratteri del tablet una tabella può sforare a destra
+    // (es. classifica generale) e, girata, verrebbe tagliata. I fogli verticali restano come prima.
+    const zl = p.w > p.h && el.scrollWidth > larga + 1 ? larga / el.scrollWidth * 0.98 : 1;
+    if(z < 0.75){ ciSta = false; if(zl < 1) el.style.zoom = zl.toFixed(3); }
+    else if(Math.min(z, zl) < 1) el.style.zoom = Math.min(z, zl).toFixed(3);
   });
   area.style.width = ''; st.remove();
   return ciSta;

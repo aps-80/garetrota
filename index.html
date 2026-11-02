@@ -862,7 +862,7 @@ function render(){
 const GUIDE = {
   home: ['Pagina iniziale', ['Nel riquadro verde <b>Cosa fare adesso</b> trovi le cose da fare in questo periodo, con il pulsante già pronto.',
     'Sotto ci sono le quote da incassare e le prossime gare: clicca sul nome di una gara per aprirla.',
-    'Ogni tanto fai il <b>backup su chiavetta USB</b> (sezione "Archivio e regolamento").']],
+    'Ogni tanto premi <b>Scarica copia di sicurezza</b> (sezione "Archivio e regolamento") e tieni il file sul PC.']],
   soci: ['Soci', ['Per un nuovo socio premi <b>+ Nuovo socio</b>, scrivi cognome e nome e premi Salva.',
     'Per cambiare i dati di un socio clicca sul <b>cognome</b> o su <b>Modifica</b>.',
     'Scrivi nella casella <b>Cerca</b> per trovare subito un socio.',
@@ -889,9 +889,9 @@ const GUIDE = {
     'Nella tabella c\'è il bilancio di ogni gara: quote incassate, ricavi secondari, costo trote, premi e costi secondari. L\'ultima colonna è la <b>cassa</b> dopo quella gara.',
     'Sotto c\'è il <b>bilancio della stagione</b>. I conti contano solo i pagamenti spuntati; premi, costi e ricavi secondari si scrivono in Classifiche.',
     'Con <b>Vedi fornitori</b> ci sono i fornitori e chi ci ospita, con "Aggiungi fornitore": servono per le lettere di Natale di Fine anno.']],
-  archivio: ['Archivio e regolamento', ['I dati si salvano da soli nel file archivio sul PC.',
-    'Per sicurezza premi <b>Fai backup</b> e salva il file sulla <b>chiavetta USB</b>.',
-    'Se cambi PC: sul nuovo PC usa <b>Ripristina da backup</b> e scegli il file dalla chiavetta.']]
+  archivio: ['Archivio e regolamento', ['I dati si salvano da soli su questo dispositivo e, quando c\'è internet, su Firebase: così li vedono il tablet e il PC.',
+    'Per sicurezza ogni tanto premi <b>Scarica copia di sicurezza</b>: il file .json va nella cartella Download. Tienilo sul PC.',
+    'Su un dispositivo nuovo basta accedere con Google: i dati arrivano da Firebase. <b>Ripristina da backup</b> serve solo se Firebase va rimesso da capo.']]
 };
 function guida(v){
   const g = GUIDE[v]; if(!aiuto || !g) return '';
@@ -937,7 +937,7 @@ function viewHome(){
     h += `<div class="alert info"><b>Firebase è vuoto.</b> Carica l'archivio di questo dispositivo (${S.soci.length} soci, ${S.gare.length} gare): poi lo vedrà anche l'altro dispositivo.<br><button class="btn primary" onclick="Sync.forzaLocale()">Carica l'archivio su Firebase</button></div>`;
   const giorniBk = S.lastBackup ? -daysUntil(S.lastBackup.slice(0,10)) : null;
   if(hasData(S) && (giorniBk===null || giorniBk>7))
-    h += `<div class="alert info">${giorniBk===null?'Non hai ancora scaricato una copia di sicurezza.':`Ultima copia di sicurezza ${giorniBk} giorni fa.`} Scaricane una e salvala su chiavetta USB.<br><button class="btn" onclick="doBackup()">Scarica copia di sicurezza</button></div>`;
+    h += `<div class="alert info">${giorniBk===null?'Non hai ancora scaricato una copia di sicurezza.':`Ultima copia di sicurezza ${giorniBk} giorni fa.`} Scaricane una e tienila sul PC.<br><button class="btn" onclick="doBackup()">Scarica copia di sicurezza</button></div>`;
   h += cosaFareAdesso();
   h += `<div class="stats">
     <div class="stat"><b>${soci.length}</b>soci (${soci.length-pierini} adulti, ${pierini} pierini)</div>
@@ -3363,7 +3363,7 @@ function viewArchivio(){
   const euro = k => `<input type="number" min="0" step="0.5" value="${esc(st[k])}" onchange="setSetting('${k}',+this.value)">`;
   return `<div class="toolbar"><h2>Archivio e regolamento</h2></div>
   <div class="grid2c"><div>
-  <div class="card"><h3>Dove stanno i dati</h3><p class="muted small">Per ora i dati sono salvati solo in questo browser, su questo tablet o PC. Scarica spesso la copia di sicurezza e tienila sulla chiavetta USB.</p></div>
+  <div class="card"><h3>Dove stanno i dati</h3><p class="muted small">I dati sono salvati in questo dispositivo, così il programma funziona anche senza internet. Quando c'è rete vanno anche su Firebase e arrivano sull'altro dispositivo (tablet o PC). La copia di sicurezza è in più: un file da tenere sul PC, se un giorno Firebase andasse rimesso da capo.</p></div>
   <div class="card"><h3>Copia di sicurezza e ripristino</h3>
     <p class="muted small">La copia di sicurezza è un file .json con tutti i dati: si scarica nella cartella Download.${S.lastBackup?` Ultima copia: <b>${fmtDate(S.lastBackup)}</b>.`:' <b>Nessuna copia ancora fatta.</b>'}</p>
     <div class="btnrow"><button class="btn primary" onclick="doBackup()">Scarica copia di sicurezza</button><button class="btn" onclick="startRestore()">Ripristina da backup…</button></div></div>

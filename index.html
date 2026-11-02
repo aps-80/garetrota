@@ -3490,7 +3490,11 @@ if('serviceWorker' in navigator && location.protocol !== 'file:'){
     };
     mostra();
     r.addEventListener('updatefound', ()=>{ const n = r.installing; if(n) n.addEventListener('statechange', ()=>{ if(n.state==='installed') mostra(); }); });
-    document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') r.update().catch(()=>{}); });
+    // controlla se c'è una versione nuova: quando torni sull'app e, sul PC dove la finestra resta sempre aperta, ogni 15 minuti
+    const controlla = ()=>{ if(navigator.onLine) r.update().catch(()=>{}); };
+    document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') controlla(); });
+    window.addEventListener('focus', controlla);
+    setInterval(controlla, 15*60*1000);
   }).catch(e=>console.warn('Service worker non registrato', e));
 }
 document.head.insertAdjacentHTML('beforeend', `<style>${CSS_LETTERA}</style>`);

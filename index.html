@@ -2027,9 +2027,11 @@ function misuraPagina(html){
   const oriz = /landscape/i.test(size);
   return {w:(oriz ? 297 : 210) - sx - dx, h:(oriz ? 210 : 297) - t - b};
 }
+// risponde false se un foglio non ci sta nemmeno al 75% (allora va su più pagine)
 function adattaAllaPagina(html){
   const p = misuraPagina(html), area = $('#print-area');
-  if(!p || !area.querySelector(UNA_PAGINA)) return;
+  if(!p || !area.querySelector(UNA_PAGINA)) return true;
+  let ciSta = true;
   // per un momento le regole di stampa valgono anche sullo schermo: così si misura come sul foglio
   let regole = '';
   Array.from(document.styleSheets).forEach(ss=>{ let rs; try{ rs = ss.cssRules; }catch(e){ return; }
@@ -2044,14 +2046,36 @@ function adattaAllaPagina(html){
     const cs = getComputedStyle(el), h = el.getBoundingClientRect().height + parseFloat(cs.marginTop) + parseFloat(cs.marginBottom);
     const z = max / h * 0.95;
     if(z < 1 && z >= 0.75) el.style.zoom = z.toFixed(3);
+    if(z < 0.75) ciSta = false;
   });
   area.style.width = ''; st.remove();
+  return ciSta;
+}
+// Sul tablet Chrome non guarda "A4 landscape" e stampa sempre in verticale: i fogli orizzontali
+// si stampano su una pagina verticale con il contenuto girato di 90°. Solo fogli di una pagina e biglietti A4.
+function giraOrizzontali(){
+  const area = $('#print-area'), pagina = /@page\s*\{[^}]*size:\s*A4\s+landscape[^}]*\}/i;
+  const st = Array.from(area.querySelectorAll('style')).find(s=>pagina.test(s.textContent));
+  if(!st) return;
+  const m = pagina.exec(st.textContent);
+  const r = /margin:\s*([^;}]+)/.exec(m[0]), margine = r ? r[1].trim() : '11mm';
+  const gira = contenuto => {
+    const fuori = document.createElement('div'), dentro = document.createElement('div');
+    fuori.style.cssText = 'width:210mm;height:296mm;position:relative;overflow:hidden;page-break-after:always';
+    dentro.style.cssText = `position:absolute;top:0;left:0;width:297mm;height:210mm;box-sizing:border-box;padding:${margine};transform-origin:0 0;transform:translateX(210mm) rotate(90deg)`;
+    fuori.appendChild(dentro); return [fuori, dentro];
+  };
+  const pagine = area.querySelectorAll('.pagA4');
+  if(pagine.length) pagine.forEach(pg=>{ const [f, d] = gira(); pg.replaceWith(f); d.appendChild(pg); });
+  else { const [f, d] = gira(); Array.from(area.childNodes).forEach(n=>{ if(n!==st) d.appendChild(n); }); f.style.pageBreakAfter = 'auto'; area.appendChild(f); }
+  st.textContent = st.textContent.replace(m[0], '@page{size:A4 portrait;margin:0}');
 }
 function printRaw(html){
   $('#print-area').innerHTML = html;
   $('#print-area').querySelectorAll('.noprint').forEach(b=>b.remove());
   const vai = () => {
-    adattaAllaPagina(html);
+    const ciSta = adattaAllaPagina(html);
+    if(TABLET && ciSta) giraOrizzontali();
     setTimeout(stampaPC, 50);
   };
   // le misure si prendono quando lo stemma e le altre immagini sono pronte, altrimenti il foglio sembra più corto

@@ -442,6 +442,7 @@ header,main,dialog{zoom:var(--zoom,1)}
   .pagamenti .ptot th{font-size:10pt;font-weight:700}
   .pagamenti .ptot td{height:7mm;text-align:center;font-size:13pt;font-weight:700}
   .pagamenti .ptot small{display:block;font-size:8pt;font-weight:400;margin-top:1pt}
+  .pagamenti .ptot td.pa{height:6mm;font-size:12pt}
   .totpag{font-family:Arial,Helvetica,sans-serif}
   .totpag .gtit{font-size:15pt;margin:0 0 2mm;white-space:pre}
   .totpag .sez{font-weight:700;font-size:17pt;margin:3mm 0 1mm;border-bottom:2px solid #000;padding-bottom:1mm}
@@ -1639,8 +1640,13 @@ function htmlPagamenti(g, conti){
   // 43 righe in tutto: sotto ci stanno i totali (solo i pagamenti spuntati, come nei conti della gara)
   const libere = []; for(let b = nextBorsa(g); libere.length < Math.max(6, 43-rows.length); b++) libere.push(b);
   const c = contiGara(g), eur = n => '€ ' + fmtDec2(n);
-  const tot = `<table class="ptot"><tr><th>CONCORRENTI</th><th>SOCI PAGATI</th><th>RICAVI GARA</th><th>RICAVI SOCI</th><th>TOTALE</th></tr>
-    <tr><td>${c.persone}${c.pagPers < c.persone ? `<small>hanno pagato in ${c.pagPers}</small>` : ''}</td><td>${c.iscrizioni}</td><td>${eur(c.qGara)}</td><td>${eur(c.qSoci)}</td><td>${eur(c.qGara + c.qSoci)}</td></tr></table>`;
+  // sotto il numero di concorrenti e soci pagati, due celle: pierini (P) e adulti (A)
+  const conc = g.iscritti.filter(partecipa).flatMap(membri), pConc = conc.filter(isPierino).length;
+  const pa = (p, a) => `<td class="pa">P ${p}</td><td class="pa">A ${a}</td>`;
+  const tot = `<table class="ptot"><colgroup><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:10%"><col style="width:20%"><col style="width:20%"><col style="width:20%"></colgroup>
+    <tr><th colspan="2">CONCORRENTI</th><th colspan="2">SOCI PAGATI</th><th>RICAVI GARA</th><th>RICAVI SOCI</th><th>TOTALE</th></tr>
+    <tr><td colspan="2">${c.persone}${c.pagPers < c.persone ? `<small>hanno pagato in ${c.pagPers}</small>` : ''}</td><td colspan="2">${c.iscrizioni}</td><td rowspan="2">${eur(c.qGara)}</td><td rowspan="2">${eur(c.qSoci)}</td><td rowspan="2">${eur(c.qGara + c.qSoci)}</td></tr>
+    <tr>${pa(pConc, conc.length - pConc)}${pa(c.pSoci.pierini.n, c.pSoci.adulti.n)}</tr></table>`;
   const casella = v => `<span class="cbx">${v?'✓':''}</span>`;
   const quota = e => { const d = dovuto(g,e); return fmtDec2(d.tot) + (d.soci ? ` <span class="qd">(gara ${fmtNum(d.gara)} + socio ${fmtNum(d.soci)})</span>` : ''); };
   const quoteGara = t.quotaGaraAdulto===t.quotaGaraPierino ? `quota gara € ${fmtNum(t.quotaGaraAdulto)}` : `quota gara adulti € ${fmtNum(t.quotaGaraAdulto)}, pierini € ${fmtNum(t.quotaGaraPierino)}`;

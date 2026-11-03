@@ -333,13 +333,18 @@ header,main,dialog{zoom:var(--zoom,1)}
   .cena2 table.cont td{font-size:13pt;padding:.4mm 22mm .6mm 0}
   .cena2 .vuota{height:4mm}
   .cena2 .firma2{text-align:right;margin:4mm 6mm 0 0;font-size:13.5pt}
-  /* tessere: 2 colonne x 5 righe su A4, bordo tratteggiato per ritagliare */
-  .tessere{display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:56mm;font-family:"Times New Roman",Times,serif;color:#000}
-  .tess{border:1px dashed #888;text-align:center;padding:3mm 2mm 0;overflow:hidden}
-  .tess .tn,.tess .ts{font-size:12.5pt;line-height:1.25}
-  .tess img{height:21mm;display:block;margin:1.5mm auto}
-  .tess .ti{font-size:11pt;line-height:1.25}
-  .tess .tv{font-size:12pt;line-height:1.25}
+  /* tessere: 80x50 mm, per le buste da plastificare 85x55 (bordi da sigillare compresi);
+     2 colonne x 5 righe su A4, il tratteggio è la linea di taglio */
+  .tessere{display:grid;grid-template-columns:80mm 80mm;grid-auto-rows:50mm;gap:5mm 8mm;justify-content:center;font-family:"Times New Roman",Times,serif;color:#000}
+  .tess{box-sizing:border-box;width:80mm;height:50mm;border:1px dashed #888;padding:3mm 3mm 2.5mm;overflow:hidden;display:flex;flex-direction:column}
+  .tess .tsu{display:flex;gap:3mm;align-items:center;flex:1;min-height:0}
+  .tess img{height:24mm;width:24mm;object-fit:contain;flex:none}
+  .tess .tdati{flex:1;min-width:0;line-height:1.2}
+  .tess .tn{font-size:11pt}
+  .tess .ts{font-size:9pt;margin-top:1.5mm}
+  .tess .tnome{font-size:12.5pt;font-weight:700;overflow-wrap:anywhere}
+  .tess .ti{font-size:9pt;margin-top:1.5mm}
+  .tess .tv{font-size:11pt;font-weight:700;text-align:center;border-top:1px solid #000;padding-top:1.5mm;margin-top:1.5mm}
   /* lettera di Natale ai fornitori: stemma in alto a sinistra, testo largo e arioso, Babbo Natale in basso a sinistra */
   .fornit .logo{width:38mm;display:block;margin:2mm 0 0 14mm}
   .fornit .corpo{margin:12mm 6mm 0 4mm}
@@ -709,6 +714,29 @@ function cambiaZoom(d){ livelloZoom += d; applicaZoom(); scriviPref('zoom', live
 function cambiaAiuto(){ aiuto = !aiuto; scriviPref('aiuto', aiuto); render(); toast(aiuto ? 'Spiegazioni visibili in ogni pagina' : 'Spiegazioni nascoste: premi "? Aiuto" per rivederle'); }
 function matchQuery(text, q){ text=text.toLowerCase(); return q.toLowerCase().split(/\s+/).filter(Boolean).every(w=>text.indexOf(w)>=0); }
 function fileSafe(s){ return s.replace(/[^\w\-àèéìòù ]+/gi,'').trim().replace(/\s+/g,'-').slice(0,80); }
+// modifiche scartate dalla sincronizzazione: se lo stesso documento è cambiato su tutti e due i dispositivi
+// vince questo, e la versione dell'altro resta qui (le ultime 20) per poterla scaricare e controllare
+const LS_CONFLITTI = 'gareTrota.conflitti';
+function leggiConflitti(){ try{ return JSON.parse(localStorage.getItem(LS_CONFLITTI)) || []; }catch(e){ return []; } }
+function salvaConflitti(c){ try{ if(c.length) localStorage.setItem(LS_CONFLITTI, JSON.stringify(c.slice(-20))); else localStorage.removeItem(LS_CONFLITTI); }catch(e){} }
+function nomeDoc(id){
+  if(id.startsWith('g_')){ const g = gara(id.slice(2)); return g ? 'gara del ' + fmtDate(g.data) : 'una gara tolta'; }
+  return {soci:'soci', impostazioni:'impostazioni', logo:'stemma', resto:'altri dati'}[id] || id;
+}
+function scaricaConflitti(){
+  const c = leggiConflitti(); if(!c.length) return;
+  downloadBlob(new Blob([JSON.stringify(c.map(x=>({cosa: nomeDoc(x.id), documento: x.id, quando: x.quando, dati: JSON.parse(x.j)})), null, 1)], {type:'application/json'}), 'modifiche-scartate-' + new Date().toISOString().slice(0,10) + '.json');
+}
+function svuotaConflitti(){
+  if(!confirm('Togliere l\'elenco delle modifiche scartate? Scaricalo prima, se ti serve.')) return;
+  salvaConflitti([]); render();
+}
+function boxConflitti(){
+  const c = leggiConflitti(); if(!c.length) return '';
+  return `<div class="card"><h3>Modifiche scartate (${c.length})</h3><p class="muted small">Lo stesso dato era stato cambiato sia qui sia sull'altro dispositivo, mentre uno dei due era senza internet. Sono rimasti i dati di questo dispositivo; qui sotto le versioni dell'altro, da controllare.</p>
+    <ul class="small">${c.slice().reverse().map(x=>`<li>${esc(nomeDoc(x.id))}, ${fmtDate(x.quando.slice(0,10))} ore ${x.quando.slice(11,16)} (ora UTC)</li>`).join('')}</ul>
+    <div class="btnrow"><button class="btn primary" onclick="scaricaConflitti()">Scarica le versioni scartate</button><button class="btn" onclick="svuotaConflitti()">Togli l'elenco</button></div></div>`;
+}
 function downloadBlob(blob, name){
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href); a.remove();},1000); }
 function titoloSoc(){ return S.settings.nomeSocieta || 'Società di pesca'; }
@@ -1017,10 +1045,12 @@ function pagaQuota(id){
 function tessereAnno(y){ const t = S.settings.tessere = S.settings.tessere || {}; return t[y] = t[y] || {}; }
 function htmlTessera(s, y){
   const luogo = [esc(s.cap||''), s.citta ? `<b>${esc(s.citta)}</b>` : '', s.provincia ? `(${esc(s.provincia)})` : ''].filter(Boolean).join(' ');
-  return `<div class="tess"><div class="tn">Tessera n° ${esc(String(s.numero||''))}</div>
-    <div class="ts">Socio Sig <b>${esc(nome(s))}</b></div><img src="${logoSocieta()}" alt="">
-    <div class="ti">${esc(s.indirizzo||'')}${s.indirizzo && luogo ? '&nbsp;&nbsp; ' : ''}${luogo}</div>
-    <div class="tv">Tessera valida per anno ${y}</div></div>`;
+  // stemma a sinistra, dati a destra, anno di validità in fondo
+  return `<div class="tess"><div class="tsu"><img src="${logoSocieta()}" alt=""><div class="tdati">
+    <div class="tn">Tessera n° <b>${esc(String(s.numero||''))}</b></div>
+    <div class="ts">Socio Sig.</div><div class="tnome">${esc(nome(s))}</div>
+    <div class="ti">${esc(s.indirizzo||'')}${s.indirizzo && luogo ? '<br>' : ''}${luogo}</div></div></div>
+    <div class="tv">Tessera valida per l'anno ${y}</div></div>`;
 }
 function htmlTessere(lista, y){
   const fogli = []; for(let i=0; i<lista.length; i+=10) fogli.push(lista.slice(i, i+10));
@@ -1038,7 +1068,7 @@ function openTessere(sid){
     <label class="chk"><input type="radio" name="quali" value="una" ${sid?'checked':''}> Ristampa delle tessere perse o rovinate, dei soci spuntati qui sotto:</label>
     <div class="addlist" style="margin:4px 0 0 26px;max-height:220px">${soci.map(s=>{ const t = tessereAnno(y0)[s.id];
       return `<label class="chk" style="display:flex"><input type="checkbox" class="rist" value="${s.id}" ${s.id===sid?'checked':''} onchange="if(this.checked)this.form.quali.value='una'">&nbsp;${esc(nome(s))} (n° ${esc(String(s.numero||''))})${t ? ` <span class="muted small">&nbsp;stampata il ${fmtDate(t.data)}${t.volte>1?', '+t.volte+' volte':''}</span>` : ''}</label>`; }).join('')}</div></div>
-    <p class="help">10 tessere per foglio A4, da ritagliare lungo il tratteggio. Il programma si ricorda quali tessere ha già stampato, così la volta dopo stampa solo quelle nuove (per esempio dei nuovi soci).</p>`, d=>{
+    <p class="help">10 tessere per foglio A4, da ritagliare lungo il tratteggio. Ogni tessera è 8 x 5 cm: entra nelle buste da plastificare 8,5 x 5,5 cm. Per avere la misura giusta, nella finestra di stampa la scala deve essere al 100% (non "Adatta alla pagina"). Il programma si ricorda quali tessere ha già stampato, così la volta dopo stampa solo quelle nuove (per esempio dei nuovi soci).</p>`, d=>{
       const y = +d.anno, copie = Math.max(1, Math.min(10, +d.copie || 1));
       const spuntati = [...document.querySelectorAll('#dlgForm .rist:checked')].map(x=>x.value);
       let lista = d.quali==='una' ? soci.filter(s=>spuntati.indexOf(s.id)>=0) : d.quali==='tutte' ? soci.filter(s=>quotaPagata(s, y)) : nuove(y);
@@ -3396,7 +3426,7 @@ function viewArchivio(){
   const euro = k => `<input type="number" min="0" step="0.5" value="${esc(st[k])}" onchange="setSetting('${k}',+this.value)">`;
   return `<div class="toolbar"><h2>Archivio e regolamento</h2></div>
   <div class="grid2c"><div>
-  <div class="card"><h3>Dove stanno i dati</h3><p class="muted small">I dati sono salvati in questo dispositivo, così il programma funziona anche senza internet. Quando c'è rete vanno anche su Firebase e arrivano sull'altro dispositivo (tablet o PC). La copia di sicurezza è in più: un file da tenere sul PC, se un giorno Firebase andasse rimesso da capo.</p></div>
+  <div class="card"><h3>Dove stanno i dati</h3><p class="muted small">I dati sono salvati in questo dispositivo, così il programma funziona anche senza internet. Quando c'è rete vanno anche su Firebase e arrivano sull'altro dispositivo (tablet o PC). La copia di sicurezza è in più: un file da tenere sul PC, se un giorno Firebase andasse rimesso da capo.</p></div>${boxConflitti()}
   <div class="card"><h3>Copia di sicurezza e ripristino</h3>
     <p class="muted small">La copia di sicurezza è un file .json con tutti i dati: si scarica nella cartella Download.${S.lastBackup?` Ultima copia: <b>${fmtDate(S.lastBackup)}</b>.`:' <b>Nessuna copia ancora fatta.</b>'}</p>
     <div class="btnrow"><button class="btn primary" onclick="doBackup()">Scarica copia di sicurezza</button><button class="btn" onclick="startRestore()">Ripristina da backup…</button></div></div>
@@ -3477,6 +3507,8 @@ function loadDemo(){
 // service worker: l'app si apre anche senza internet (al campo).
 // Con una nuova VERSIONE non si ricarica da sola (si perderebbe una pesata a metà):
 // in alto compare "Nuova versione: Aggiorna" e si ricarica solo quando lo premi.
+// memoria protetta: Chrome non cancella i dati dell'app quando il tablet ha poco spazio
+if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
 if('serviceWorker' in navigator && location.protocol !== 'file:'){
   let chiesto = false;
   navigator.serviceWorker.addEventListener('controllerchange', ()=>{ if(chiesto){ chiesto = false; location.reload(); } });
@@ -3709,7 +3741,7 @@ async function avvia(){
     }
     Sync.daCaricare = false;
     const ids = new Set([...Object.keys(locale), ...Object.keys(remoto), ...Object.keys(base)]);
-    const daInviare = [], daApplicare = [];
+    const daInviare = [], daApplicare = [], scartate = [];
     ids.forEach(id=>{
       const hL = imp(id in locale ? locale[id] : null);
       const hR = id in remoto ? imp(remoto[id]) : fidato ? null : undefined; // undefined = non si sa ancora
@@ -3718,8 +3750,16 @@ async function avvia(){
       if(hR===undefined){ if(hL!==B) daInviare.push(id); }
       else if(hR===B) daInviare.push(id);      // cambiato qui
       else if(hL===B) daApplicare.push(id);    // cambiato sull'altro dispositivo
-      else daInviare.push(id);                 // cambiato da tutte e due le parti: vince questo dispositivo
+      else {                                   // cambiato da tutte e due le parti: vince questo dispositivo,
+        daInviare.push(id);                    // la versione dell'altro resta tra le modifiche scartate
+        scartate.push({id, quando: new Date().toISOString(), j: remoto[id]});
+      }
     });
+    if(scartate.length){
+      salvaConflitti(leggiConflitti().concat(scartate));
+      if(view==='archivio' && !staiScrivendo()) render();
+      alert(`Mentre questo dispositivo era senza internet, l'altro ha cambiato gli stessi dati (${scartate.map(c=>nomeDoc(c.id)).join(', ')}). Ho tenuto i dati di questo dispositivo. La versione dell'altro non è persa: la trovi in "Archivio e regolamento", "Modifiche scartate".`);
+    }
     if(daInviare.length) inviaDocs(daInviare, locale);
     if(daApplicare.length){
       if(staiScrivendo()) rimandato = true;

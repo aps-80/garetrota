@@ -13,6 +13,10 @@
 --warn:#8a5300;--warnbg:#fff1d6;--bad:#a8231b;--badbg:#fde6e3;--ok:#1b6e36;--okbg:#e2f4e8;--gold:#fff6d8;--silver:#f1f3f5;--bronze:#fbeee4;--pier:#e7eefc;--pierink:#2a4a8a}
 *{box-sizing:border-box}
 html,body{margin:0}
+/* iPad: niente ingrandimento da solo (doppio tocco, rotazione dello schermo) */
+html{touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+/* iPad: Safari ingrandisce la pagina quando si tocca una casella con le scritte sotto i 16px */
+@supports (-webkit-touch-callout:none){ input,select,textarea{font-size:max(16px,1em) !important} }
 body{font:15px/1.45 "Segoe UI",Tahoma,Arial,sans-serif;background:var(--bg);color:var(--ink)}
 header{background:var(--accent);color:#fff;display:flex;align-items:center;padding:0 10px;position:sticky;top:0;z-index:5;flex-wrap:wrap;box-shadow:0 1px 4px rgba(0,0,0,.15)}
 header h1{font-size:16px;margin:0 12px 0 0;padding:9px 0;white-space:nowrap}
@@ -512,6 +516,8 @@ header,main,dialog{zoom:var(--zoom,1)}
 const LS_KEY = 'gareTrota.dati.v1';
 // tablet (schermo da toccare): in pesatura si apre la tastiera con i numeri
 const TABLET = matchMedia('(pointer:coarse)').matches;
+// iPad e iPhone (l'iPad si presenta come un Mac, ma con lo schermo a tocco)
+const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints > 1);
 const SETTINGS_VER = 4;
 // calendario 2026: data;orario;formato
 const CALENDARIO_2026 = `2026-02-22;08:00;individuale
@@ -892,7 +898,7 @@ function go(v, arg){
   render(); window.scrollTo(0,0);
 }
 function render(){
-  preparaStemma();
+  preparaStemma(); preparaIframe();
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.v===view || (view==='gara' && b.dataset.v==='gare')));
   const fn = {home:viewHome, soci:viewSoci, gare:viewGare, gara:viewGara, pesatura:viewPesatura, classifiche:viewClassifiche, fineanno:viewFineAnno, stampe:viewStampe, amministrazione:viewAmministrazione, archivio:viewArchivio}[view];
   $('main').innerHTML = guida(view) + fn();
@@ -2160,27 +2166,31 @@ function attesaStampa(on){
   else t.classList.remove('show');
 }
 addEventListener('afterprint', ()=>attesaStampa(false));
-// con "Salva come PDF" Chrome usa il titolo della pagina come nome del file
 // iPad e iPhone: Safari non stampa finché la pagina ha un collegamento aperto, e quello di Firebase
 // resta aperto fino a 30 secondi; poi la stampa non vale più come tocco e Safari la blocca
 // ("stampa automatica"). Lì si stampa da un foglio a parte (iframe) che non ha collegamenti aperti.
-const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints > 1);
-function stampaIframe(){
-  let f = stampaIframe.f;
-  if(!f){
-    f = stampaIframe.f = document.createElement('iframe');
-    f.setAttribute('aria-hidden', 'true'); f.tabIndex = -1;
-    f.style.cssText = 'position:fixed;left:-10000px;top:0;width:210mm;height:297mm;border:0';
-    document.body.appendChild(f);
-  }
-  const css = Array.from(document.querySelectorAll('head style')).map(s=>s.textContent).join('\n');
+// Il foglio a parte si prepara all'avvio (preparaIframe), così al tocco è già "caricato": il contenuto si mette
+// con innerHTML e non con document.write, che lo farebbe tornare "in caricamento" (e Safari bloccherebbe di nuovo).
+function preparaIframe(){
+  if(!IOS || stampaIframe.f) return;
+  const f = stampaIframe.f = document.createElement('iframe');
+  f.className = 'iframeStampa'; f.setAttribute('aria-hidden', 'true'); f.tabIndex = -1;
+  f.style.cssText = 'position:fixed;left:-10000px;top:0;width:210mm;height:297mm;border:0';
+  document.body.appendChild(f);
   const d = f.contentDocument;
-  d.open();
-  d.write(`<!doctype html><html lang="it"><head><meta charset="utf-8"><title>${esc(nomeStampaAttuale())}</title><style>${css}</style></head><body><div id="print-area">${$('#print-area').innerHTML}</div></body></html>`);
-  d.close();
+  d.head.innerHTML = `<meta charset="utf-8"><style>${Array.from(document.querySelectorAll('head style')).map(s=>s.textContent).join('\n')}</style>`;
   f.contentWindow.onafterprint = ()=>attesaStampa(false);
+}
+function stampaIframe(){
+  preparaIframe();
+  const f = stampaIframe.f, d = f.contentDocument;
+  d.title = nomeStampaAttuale();
+  d.body.innerHTML = `<div id="print-area">${$('#print-area').innerHTML}</div>`;
+  // il foglio della pagina principale si svuota: se Safari stampasse la pagina principale, non uscirebbero doppioni
+  $('#print-area').innerHTML = '';
   f.contentWindow.print();
 }
+// con "Salva come PDF" Chrome usa il titolo della pagina come nome del file
 function stampaPC(){
   if(IOS) return stampaIframe();
   const titolo = document.title;

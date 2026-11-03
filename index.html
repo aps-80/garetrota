@@ -518,6 +518,11 @@ const LS_KEY = 'gareTrota.dati.v1';
 const TABLET = matchMedia('(pointer:coarse)').matches;
 // iPad e iPhone (l'iPad si presenta come un Mac, ma con lo schermo a tocco)
 const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints > 1);
+// iPad: girando lo schermo Safari ingrandisce la pagina da solo; con maximum-scale resta alla misura giusta
+if(IOS) document.querySelector('meta[name=viewport]').setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1');
+// iPad: Safari stampa con margini larghi e con l'intestazione e il piè di pagina del sito, che non si possono togliere.
+// Lo spazio utile del foglio A4 è circa 180 x 240 mm: le stampe di una pagina si fanno stare lì dentro.
+const IOS_FOGLIO = {w:180, h:240};
 const SETTINGS_VER = 4;
 // calendario 2026: data;orario;formato
 const CALENDARIO_2026 = `2026-02-22;08:00;individuale
@@ -1076,7 +1081,8 @@ function htmlTessera(s, y){
     <div class="tv">Tessera valida per l'anno ${y}</div></div>`;
 }
 function htmlTessere(lista, y){
-  const fogli = []; for(let i=0; i<lista.length; i+=10) fogli.push(lista.slice(i, i+10));
+  // le tessere restano 80x50 mm (devono entrare nella busta): sull'iPad, con meno spazio utile, 8 per foglio
+  const n = IOS ? 8 : 10, fogli = []; for(let i=0; i<lista.length; i+=n) fogli.push(lista.slice(i, i+n));
   return `<style>@page{size:A4 portrait;margin:8mm}</style>` + fogli.map(f=>`<div class="tessere">${f.map(s=>htmlTessera(s, y)).join('')}</div>`).join(SALTO_PAGINA);
 }
 function openTessere(sid){
@@ -2082,10 +2088,12 @@ function misuraPagina(html){
   const m = /@page\s*\{([^}]*)\}/.exec(html), r = m ? m[1] : '';
   const size = (/size:\s*([^;]+)/.exec(r) || [])[1] || 'A4 portrait';
   if(!/A4/i.test(size)) return null;
-  // su iPad Safari stampa con i suoi margini (più larghi dei nostri): si misura come se fossero almeno 15 mm
-  const [t, dx = t, b = t, sx = dx] = ((/margin:\s*([^;]+)/.exec(r) || [])[1] || '11mm').trim().split(/\s+/).map(v=>IOS ? Math.max(parseFloat(v) || 0, 15) : parseFloat(v) || 0);
+  const [t, dx = t, b = t, sx = dx] = ((/margin:\s*([^;]+)/.exec(r) || [])[1] || '11mm').trim().split(/\s+/).map(v=>parseFloat(v) || 0);
   const oriz = /landscape/i.test(size);
-  return {w:(oriz ? 297 : 210) - sx - dx, h:(oriz ? 210 : 297) - t - b};
+  const area = {w:(oriz ? 297 : 210) - sx - dx, h:(oriz ? 210 : 297) - t - b};
+  // su iPad lo spazio utile è più piccolo (IOS_FOGLIO); i fogli orizzontali poi si girano e si rimpiccioliscono
+  if(IOS && !oriz){ area.w = Math.min(area.w, IOS_FOGLIO.w); area.h = Math.min(area.h, IOS_FOGLIO.h); }
+  return area;
 }
 // risponde false se un foglio non ci sta nemmeno al 75% (allora va su più pagine)
 function adattaAllaPagina(html){
@@ -2122,8 +2130,8 @@ function giraOrizzontali(){
   if(!st) return;
   const m = pagina.exec(st.textContent);
   const r = /margin:\s*([^;}]+)/.exec(m[0]), margine = r ? r[1].trim() : '11mm';
-  // su iPad Safari tiene i suoi margini anche con margin:0: il foglio girato si fa più piccolo (180 x 260 mm)
-  const L = IOS ? 180 : 210, A = IOS ? 260 : 296, s = IOS ? Math.min(L/210, A/297).toFixed(3) : 1;
+  // su iPad Safari tiene i suoi margini anche con margin:0: il foglio girato si fa stare nello spazio utile
+  const L = IOS ? IOS_FOGLIO.w : 210, A = IOS ? IOS_FOGLIO.h : 296, s = IOS ? Math.min(L/210, A/297).toFixed(3) : 1;
   const gira = contenuto => {
     const fuori = document.createElement('div'), dentro = document.createElement('div');
     fuori.style.cssText = `width:${L}mm;height:${A}mm;position:relative;overflow:hidden;page-break-after:always`;
@@ -2178,7 +2186,7 @@ function preparaIframe(){
   f.style.cssText = 'position:fixed;left:-10000px;top:0;width:210mm;height:297mm;border:0';
   document.body.appendChild(f);
   const d = f.contentDocument;
-  d.head.innerHTML = `<meta charset="utf-8"><style>${Array.from(document.querySelectorAll('head style')).map(s=>s.textContent).join('\n')}</style>`;
+  d.head.innerHTML = `<meta charset="utf-8"><style>${Array.from(document.querySelectorAll('head style')).map(s=>s.textContent).join('\n')}\nbody{margin:0}</style>`;
   f.contentWindow.onafterprint = ()=>attesaStampa(false);
 }
 function stampaIframe(){

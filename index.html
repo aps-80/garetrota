@@ -334,9 +334,11 @@ header,main,dialog{zoom:var(--zoom,1)}
   .cena2 .vuota{height:4mm}
   .cena2 .firma2{text-align:right;margin:4mm 6mm 0 0;font-size:13.5pt}
   /* tessere: 80x50 mm, per le buste da plastificare 85x55 (bordi da sigillare compresi);
-     2 colonne x 5 righe su A4, il tratteggio è la linea di taglio */
-  .tessere{display:grid;grid-template-columns:80mm 80mm;grid-auto-rows:50mm;gap:5mm 8mm;justify-content:center;font-family:"Times New Roman",Times,serif;color:#000}
-  .tess{box-sizing:border-box;width:80mm;height:50mm;border:1px dashed #888;padding:3mm 3mm 2.5mm;overflow:hidden;display:flex;flex-direction:column}
+     2 colonne x 5 righe su A4, unite: tra due tessere un solo tratteggio, cioè un solo taglio */
+  .tessere{display:grid;grid-template-columns:80mm 80mm;grid-auto-rows:50mm;justify-content:center;font-family:"Times New Roman",Times,serif;color:#000}
+  .tess{box-sizing:border-box;width:80mm;height:50mm;border-right:1px dashed #888;border-bottom:1px dashed #888;padding:3mm 3mm 2.5mm;overflow:hidden;display:flex;flex-direction:column}
+  .tess:nth-child(odd){border-left:1px dashed #888}
+  .tess:nth-child(-n+2){border-top:1px dashed #888}
   .tess .tsu{display:flex;gap:3mm;align-items:center;flex:1;min-height:0}
   .tess img{height:24mm;width:24mm;object-fit:contain;flex:none}
   .tess .tdati{flex:1;min-width:0;line-height:1.2}

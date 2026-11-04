@@ -241,6 +241,22 @@ header,main,dialog{zoom:var(--zoom,1)}
 /* tablet in verticale: elenco delle borse a sinistra, a destra la pesata e sotto la classifica */
 @media (max-width:980px) and (min-width:701px){.pesgrid{align-items:start}.pesgrid>:first-child{grid-row:span 2}.pesgrid>:last-child{grid-column:auto}}
 @media (max-width:700px){.pesgrid,.grid2,.grid3,.grid4{grid-template-columns:1fr}.pesgrid>:last-child{grid-column:auto}main{padding:8px}}
+/* iPhone (classe messa solo lì): schermo stretto, si scorre di lato solo dentro le tabelle grandi */
+html.iphone header{padding:0 4px}
+html.iphone nav{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));flex:1 1 100%;width:100%}
+html.iphone nav button{padding:9px 1px 6px;font-size:13px;min-width:0}
+html.iphone #archStatus,html.iphone #btnAiuto,html.iphone .legenda{display:none}
+html.iphone .hdx{margin-left:0;width:100%;justify-content:space-between;padding-bottom:4px}
+html.iphone main{padding:8px}
+html.iphone .grid2,html.iphone .grid3,html.iphone .grid4,html.iphone .grid5,html.iphone .grid2c,html.iphone .estrazione{grid-template-columns:minmax(0,1fr)}
+html.iphone .filters input[type=search]{min-width:0;width:100%;flex:1 1 100%}
+html.iphone .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+html.iphone .card{min-width:0}
+html.iphone main select{max-width:100%}
+html.iphone .tbl:has(#sociBody) th:nth-child(1),html.iphone .tbl:has(#sociBody) th:nth-child(4),html.iphone .tbl:has(#sociBody) th:nth-child(8),html.iphone .tbl:has(#sociBody) th:nth-child(9),
+html.iphone #sociBody td:nth-child(1):not(.empty),html.iphone #sociBody td:nth-child(4),html.iphone #sociBody td:nth-child(8),html.iphone #sociBody td:nth-child(9){display:none}
+html.iphone dialog{width:100%;max-width:calc(100vw - 16px)}
+html.iphone .kv dd{overflow-wrap:anywhere}
 @media print{
   body{background:#fff;font-size:10.5pt}
   header,main,#toast,dialog{display:none !important}
@@ -518,6 +534,10 @@ const LS_KEY = 'gareTrota.dati.v1';
 const TABLET = matchMedia('(pointer:coarse)').matches;
 // iPad e iPhone (l'iPad si presenta come un Mac, ma con lo schermo a tocco)
 const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints > 1);
+// iPhone: per guardare i dati e correggere la scheda del socio; niente stampe e niente gara.
+// Lo schermo piccolo lo riconosce anche se in Safari è scelto "Richiedi sito desktop". Le regole sono nella sezione IPHONE in fondo.
+const IPHONE = IOS && (/iPhone|iPod/.test(navigator.userAgent) || Math.min(screen.width, screen.height) < 600);
+if(IPHONE) document.documentElement.classList.add('iphone');
 // iPad: girando lo schermo Safari ingrandisce la pagina da solo; con maximum-scale resta alla misura giusta
 if(IOS) document.querySelector('meta[name=viewport]').setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=1');
 // iPad: Safari stampa con margini larghi e con l'intestazione e il piè di pagina del sito, che non si possono togliere.
@@ -626,6 +646,7 @@ let S;
 function hasData(x){ return x.soci.length>0 || x.gare.length>0; }
 function saveLocal(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(S)); }catch(e){ alert('Impossibile salvare nel browser: '+e.message); } }
 function save(){
+  if(IPHONE) return rifiutaIPhone();
   // ogni gara iniziata o conclusa tiene i valori (quote, prezzo al kg, punti) di quel momento
   S.gare.forEach(g=>{ if(!g.tariffe && garaIniziata(g)) congelaTariffe(g); });
   S.savedAt = new Date().toISOString(); saveLocal(); updateStatus();
@@ -828,7 +849,7 @@ function doBackup(){
 }
 function startRestore(){ const i=$('#restoreInput'); i.value=''; i.click(); }
 $('#restoreInput').onchange = async e => {
-  const f = e.target.files[0]; if(!f) return;
+  const f = e.target.files[0]; if(!f || IPHONE) return;
   let data;
   try{ data = normalize(JSON.parse(await f.text())); }catch(err){ alert('File di backup non valido.\n'+err.message); return; }
   const quando = data.savedAt ? ` (dati del ${fmtDate(data.savedAt)} ore ${fmtTime(new Date(data.savedAt))})` : '';
@@ -893,6 +914,7 @@ function legendaColori(){
 /* ================= NAVIGAZIONE ================= */
 let view = 'home', viewArg = null;
 function go(v, arg){
+  if(IPHONE && (v==='pesatura' || v==='stampe')) v = 'home';
   view = v;
   if(v==='gara') viewArg = arg;
   if(v==='classifiche' && arg) Object.assign(cls, arg);
@@ -951,7 +973,7 @@ const GUIDE = {
     'Su un dispositivo nuovo basta accedere con Google: i dati arrivano da Firebase. <b>Ripristina da backup</b> serve solo se Firebase va rimesso da capo.']]
 };
 function guida(v){
-  const g = GUIDE[v]; if(!aiuto || !g) return '';
+  const g = GUIDE[v]; if(!aiuto || !g || IPHONE) return '';
   return `<div class="guida"><b class="gt">Come si usa: ${g[0]}</b><ol>${g[1].map(x=>`<li>${x}</li>`).join('')}</ol><a href="#" onclick="cambiaAiuto();return false">Nascondi queste spiegazioni</a></div>`;
 }
 // "Cosa fare adesso": le scadenze del periodo, con il pulsante giusto
@@ -988,14 +1010,15 @@ function viewHome(){
   const prossime = S.gare.filter(g=>g.data>=t).sort((a,b)=>a.data.localeCompare(b.data)).slice(0,4);
   const recenti = S.gare.filter(g=>g.data<t).sort((a,b)=>b.data.localeCompare(a.data)).slice(0,4);
   let h = '';
-  if(!hasData(S))
+  if(IPHONE && !hasData(S)) h += `<div class="alert info"><b>Non ci sono ancora dati.</b> Accedi con Google: i dati arrivano da Firebase.</div>`;
+  else if(!hasData(S))
     h += `<div class="alert info"><b>Non ci sono ancora dati.</b> Per caricare l'archivio premi "Ripristina da backup" e scegli il file .json della copia di sicurezza.<br><button class="btn primary" onclick="startRestore()">Ripristina da backup</button></div>`;
   if(Sync.stato==='collegato' && Sync.daCaricare && hasData(S))
     h += `<div class="alert info"><b>Firebase è vuoto.</b> Carica l'archivio di questo dispositivo (${S.soci.length} soci, ${S.gare.length} gare): poi lo vedrà anche l'altro dispositivo.<br><button class="btn primary" onclick="Sync.forzaLocale()">Carica l'archivio su Firebase</button></div>`;
   const giorniBk = S.lastBackup ? -daysUntil(S.lastBackup.slice(0,10)) : null;
-  if(hasData(S) && (giorniBk===null || giorniBk>7))
+  if(!IPHONE && hasData(S) && (giorniBk===null || giorniBk>7))
     h += `<div class="alert info">${giorniBk===null?'Non hai ancora scaricato una copia di sicurezza.':`Ultima copia di sicurezza ${giorniBk} giorni fa.`} Scaricane una e tienila sul PC.<br><button class="btn" onclick="doBackup()">Scarica copia di sicurezza</button></div>`;
-  h += cosaFareAdesso();
+  if(!IPHONE) h += cosaFareAdesso();
   h += `<div class="stats">
     <div class="stat"><b>${soci.length}</b>soci (${soci.length-pierini} adulti, ${pierini} pierini)</div>
     <div class="stat"><b style="color:${nonPagata.length?'var(--bad)':'var(--ok)'}">${nonPagata.length}</b>quote sociali ${y} non pagate</div>
@@ -1159,6 +1182,7 @@ function socioForm(s, opts){
   <div class="grid2" style="margin-top:10px"><label class="span2">Note<textarea name="note">${esc(s.note||'')}</textarea></label></div>`;
 }
 function editSocio(id, opts){
+  if(IPHONE) return schedaIPhone(id);
   opts = opts || {};
   const s = id ? socio(id) : {tipo:'adulto'};
   const extra = id ? `<button type="button" class="btn danger" onclick="deleteSocio('${id}')">Elimina socio</button>` : '';
@@ -1175,14 +1199,17 @@ function editSocio(id, opts){
     if(id) Object.assign(s, rec);
     else { sid = uid(); S.soci.push(Object.assign({id:sid, numero:nextNumeroSocio(), quotaAnno:''}, rec)); }
     // quota sociale pagata fuori gara: segnata oggi, data cambiata oppure tolta
-    const sn = socio(sid), y = curYear();
-    if(d.pagaOra) segnaQuotaFuoriGara(sn, y, today());
-    else if(d.togliQuota){ delete sn.quoteFuoriGara[y]; if(!dovePagata(sn, y) && +sn.quotaAnno >= y) sn.quotaAnno = y - 1; }
-    else if(d.quotaData && sn.quoteFuoriGara && sn.quoteFuoriGara[y]) sn.quoteFuoriGara[y].data = d.quotaData;
+    quotaDaScheda(socio(sid), d);
     save();
     if(opts.after){ closeDlg(); opts.after(sid); } else render();
     toast('Salvato');
   }, extra);
+}
+function quotaDaScheda(sn, d){
+  const y = curYear();
+  if(d.pagaOra) segnaQuotaFuoriGara(sn, y, today());
+  else if(d.togliQuota){ delete sn.quoteFuoriGara[y]; if(!dovePagata(sn, y) && +sn.quotaAnno >= y) sn.quotaAnno = y - 1; }
+  else if(d.quotaData && sn.quoteFuoriGara && sn.quoteFuoriGara[y]) sn.quoteFuoriGara[y].data = d.quotaData;
 }
 function nextNumeroSocio(){ return S.soci.reduce((m,x)=>Math.max(m, parseInt(x.numero,10)||0), 0) + 1; }
 function deleteSocio(id){
@@ -2144,6 +2171,7 @@ function giraOrizzontali(){
   st.textContent = st.textContent.replace(m[0], '@page{size:A4 portrait;margin:0}');
 }
 function printRaw(html){
+  if(IPHONE) return;
   // la finestra di stampa del tablet ci mette qualche secondo ad aprirsi: intanto si vede un avviso
   attesaStampa(true);
   $('#print-area').innerHTML = html;
@@ -2180,7 +2208,7 @@ addEventListener('afterprint', ()=>attesaStampa(false));
 // Il foglio a parte si prepara all'avvio (preparaIframe), così al tocco è già "caricato": il contenuto si mette
 // con innerHTML e non con document.write, che lo farebbe tornare "in caricamento" (e Safari bloccherebbe di nuovo).
 function preparaIframe(){
-  if(!IOS || stampaIframe.f) return;
+  if(!IOS || IPHONE || stampaIframe.f) return;
   const f = stampaIframe.f = document.createElement('iframe');
   f.className = 'iframeStampa'; f.setAttribute('aria-hidden', 'true'); f.tabIndex = -1;
   f.style.cssText = 'position:fixed;left:-10000px;top:0;width:210mm;height:297mm;border:0';
@@ -3606,6 +3634,55 @@ if('serviceWorker' in navigator && location.protocol !== 'file:'){
     setInterval(controlla, 15*60*1000);
   }).catch(e=>console.warn('Service worker non registrato', e));
 }
+/* ================= IPHONE ================= */
+// Solo per guardare i dati e correggere la scheda del socio. Tre blocchi, uno dentro l'altro:
+// 1) pulsanti e caselle non previsti spariscono (si tiene solo ciò che è nell'elenco qui sotto, il resto no);
+// 2) save() non salva: rimette i dati di prima;
+// 3) la sincronizzazione su iPhone riceve soltanto: l'unica scrittura su Firebase è Sync.modificaSocio.
+const IPHONE_PERMESSI = /^(go\('(home|soci|gare|gara|classifiche|fineanno|amministrazione|archivio)'|editSocio\('|closeDlg\(|cambiaZoom\(|cambiaAiuto\(|statusClick\(|infoSync\(|Sync\.accedi|soc\.|gar\.chiuse=|cls\.|amm\.vista=|amm\.anno=|cen\.anno=|sceltaStagioneClassifica\()/;
+function rifiutaIPhone(){
+  S = loadLocal(); closeDlg(); render();
+  toast('Su iPhone si può cambiare solo la scheda del socio');
+}
+function pulisciIPhone(){
+  document.querySelectorAll('[onclick],[onchange],[oninput],[onkeydown]').forEach(el=>{
+    const h = el.getAttribute('onclick') || el.getAttribute('onchange') || el.getAttribute('oninput') || el.getAttribute('onkeydown');
+    if(IPHONE_PERMESSI.test(h)) return;
+    if(el.matches('button')) el.remove();
+    else if(el.matches('a')) el.replaceWith(...el.childNodes);
+    else { ['onclick','onchange','oninput','onkeydown'].forEach(a=>el.removeAttribute(a)); el.style.cursor = 'default'; }
+  });
+  document.querySelectorAll('main button:not([onclick])').forEach(b=>b.remove());
+  document.querySelectorAll('main input,main select,main textarea').forEach(i=>{
+    if(!i.disabled && !i.hasAttribute('onchange') && !i.hasAttribute('oninput')){ i.disabled = true; i.placeholder = ''; }
+  });
+  document.querySelectorAll('.menusez,.btnrow,.toolbar .btns').forEach(c=>{ if(!c.children.length) c.remove(); });
+}
+function schedaIPhone(id){
+  const s = id && socio(id); if(!s) return;
+  const riga = (t, v) => v ? `<dt>${t}</dt><dd>${esc(v)}</dd>` : '';
+  openDlg(nome(s), `<dl class="kv">${riga('Tipo', isPierino(s) ? 'Pierino' : 'Adulto')}${riga('Tessera', String(s.numero||''))}${riga('Email', s.email)}${riga('Contatto', s.contatto)}</dl>
+    <label style="margin-top:10px">Telefono<input name="telefono" type="tel" value="${esc(s.telefono||'')}"></label>
+    <label>Indirizzo (via e numero)<input name="indirizzo" value="${esc(s.indirizzo||'')}"></label>
+    <div class="grid3"><label>CAP<input name="cap" value="${esc(s.cap||'')}" maxlength="5" inputmode="numeric"></label>
+    <label>Città<input name="citta" value="${esc(s.citta||'')}"></label>
+    <label>Prov.<input name="provincia" value="${esc(s.provincia||'')}" maxlength="2" style="text-transform:uppercase"></label></div>
+    ${boxQuotaSocio(s, {})}
+    <label style="margin-top:10px">Note<textarea name="note">${esc(s.note||'')}</textarea></label>`, d=>{
+      const b = $('#dlgBtns .primary'); b.disabled = true;
+      const cambia = sn=>{ Object.assign(sn, {telefono:d.telefono, indirizzo:d.indirizzo, cap:d.cap, citta:d.citta, provincia:(d.provincia||'').toUpperCase(), note:d.note}); quotaDaScheda(sn, d); };
+      Promise.resolve(Sync.modificaSocio ? Sync.modificaSocio(id, cambia) : (alert('Per salvare serve l\'accesso con Google.'), false))
+        .then(ok=>{ b.disabled = false; if(ok){ closeDlg(); render(); toast('Salvato'); } });
+      return false;
+  });
+}
+if(IPHONE){
+  const voce = v => document.querySelector(`nav button[data-v=${v}]`);
+  voce('amministrazione').textContent = 'Conti';
+  voce('archivio').textContent = 'Archivio';
+  pulisciIPhone();
+  new MutationObserver(pulisciIPhone).observe(document.body, {childList:true, subtree:true});
+}
 document.head.insertAdjacentHTML('beforeend', `<style>${CSS_LETTERA}</style>`);
 applicaZoom();
 S = loadLocal();
@@ -3615,6 +3692,8 @@ completaAvvio().then(updateStatus);
 async function completaAvvio(){
   if(completaAvvio.fatto) return;
   completaAvvio.fatto = true;
+  // l'iPhone guarda i dati così come sono: le correzioni le fanno PC e tablet
+  if(IPHONE) return;
   // archivio vuoto: niente da aggiornare, i dati arrivano con "Ripristina da backup"
   if(!hasData(S)) return;
   if(!S.gare.length && !S.settings.calendario2026Importato) importaCalendario2026();
@@ -3684,7 +3763,7 @@ function attribuisciQuote2026(){
 // in comune ("base", salvata in localStorage): chi è cambiato vince; se sono cambiati tutti e due,
 // vince questo dispositivo.
 const SDK = 'https://www.gstatic.com/firebasejs/10.14.1/';
-const BKEY = 'gareTrota.sync.base';
+const BKEY = IPHONE ? 'gareTrota.sync.base.iphone' : 'gareTrota.sync.base';
 function impronta(s){
   let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
   for(let i=0; i<s.length; i++){ const c = s.charCodeAt(i); h1 = Math.imul(h1^c, 2654435761); h2 = Math.imul(h2^c, 1597334677); }
@@ -3726,14 +3805,22 @@ async function avvia(){
     try{ await Au.signInWithPopup(auth, google); }
     catch(e){
       if(e.code==='auth/popup-blocked') return Au.signInWithRedirect(auth, google);
+      if(IPHONE && e.code!=='auth/cancelled-popup-request'){ console.warn(e); return aiutoAccesso(); }
       if(e.code!=='auth/popup-closed-by-user' && e.code!=='auth/cancelled-popup-request'){ console.warn(e); alert('Accesso non riuscito ('+e.code+').'); }
     }
   };
+  // iPhone, app sulla schermata Home: la finestra di Google può non tornare all'app
+  Sync.accediStessaFinestra = ()=>{ closeDlg(); return Au.signInWithRedirect(auth, google); };
+  function aiutoAccesso(){
+    openDlg('Accesso con Google', `<p>L'accesso non è arrivato all'app.</p>
+      <p>Prova <b>Accedi in questa finestra</b>. Se non funziona, usa l'app da Safari: apri <b>${esc(location.href.split('#')[0])}</b> e accedi lì.</p>`, null,
+      '<button type="button" class="btn primary" onclick="Sync.accediStessaFinestra()">Accedi in questa finestra</button>');
+  }
   Sync.esci = async ()=>{
     if(!confirm('Uscire da Google? I dati restano su questo dispositivo, ma non si sincronizzano finché non accedi di nuovo.')) return;
     Sync.invia(); await Au.signOut(auth);
   };
-  Au.getRedirectResult(auth).catch(e=>console.warn(e));
+  Au.getRedirectResult(auth).catch(e=>{ console.warn(e); if(IPHONE) aiutoAccesso(); });
 
   let stacca = null, base = null, remoto = {}, fidato = false, pronto = false, timer = null, rimandato = false, forza = false, sceltaAperta = false;
   const leggiBase = ()=>{ try{ return JSON.parse(localStorage.getItem(BKEY)) || null; }catch(e){ return null; } };
@@ -3755,7 +3842,7 @@ async function avvia(){
   function collega(u){
     Object.assign(Sync, {stato:'collegato', email:u.email||'', msg:'', online:false, attesa:0, daCaricare:false});
     base = leggiBase(); remoto = {}; fidato = false; pronto = false;
-    Sync.hook = ()=>{ clearTimeout(timer); timer = setTimeout(riconcilia, 700); };
+    Sync.hook = IPHONE ? null : ()=>{ clearTimeout(timer); timer = setTimeout(riconcilia, 700); };
     stacca = F.onSnapshot(F.collection(db, 'archivio'), {includeMetadataChanges: true}, snap=>{
       remoto = {}; let attesa = 0;
       snap.docs.forEach(d=>{ const x = d.data(); if(typeof x.j==='string') remoto[d.id] = x.j; if(d.metadata.hasPendingWrites) attesa++; });
@@ -3775,7 +3862,7 @@ async function avvia(){
 
   // "Carica l'archivio su Firebase", "Tieni questo" e "Ripristina da backup": vince questo dispositivo
   Sync.forzaLocale = ()=>{
-    if(Sync.stato!=='collegato') return;
+    if(IPHONE || Sync.stato!=='collegato') return;
     Sync.daCaricare = false;
     if(fidato || base){ base = impronte(remoto); riconcilia(); } else forza = true;
     updateSync(); if(view==='home' && !staiScrivendo()) render();
@@ -3800,7 +3887,50 @@ async function avvia(){
     $('#dlg').addEventListener('close', ()=>{ sceltaAperta = false; }, {once: true});
   }
 
+  // iPhone: copia fedele di Firebase, non manda mai niente. Vale solo ciò che arriva dal server.
+  function specchioIPhone(){
+    if(!pronto || Sync.stato!=='collegato' || !fidato || !Object.keys(remoto).length) return updateSync();
+    base = base || {};
+    const locale = docsArchivio();
+    const diversi = [...new Set([...Object.keys(remoto), ...Object.keys(base), ...Object.keys(locale)])].filter(id=>{
+      const hR = imp(id in remoto ? remoto[id] : null), B = id in base ? base[id] : null;
+      return hR!==B || (hR===null && id.indexOf('g_')===0 && id in locale);
+    });
+    if(diversi.length){
+      if(staiScrivendo()) rimandato = true;
+      else {
+        rimandato = false;
+        diversi.forEach(id=>{ const R = id in remoto ? remoto[id] : null; applicaDoc(id, R); segna(id, imp(R)); });
+        S.savedAt = new Date().toISOString(); saveLocal(); salvaBase();
+        if(view==='gara' && !gara(viewArg)) view = 'gare';
+        render();
+        toast('Dati aggiornati');
+      }
+    }
+    updateSync();
+  }
+  // l'unica scrittura dell'iPhone: legge i soci dal server, cambia solo quel socio e li riscrive tutto in un colpo,
+  // così non si perde quello che nel frattempo ha cambiato un altro dispositivo. Senza internet non parte.
+  Sync.modificaSocio = async (id, cambia)=>{
+    if(Sync.stato!=='collegato' || !Sync.online || !navigator.onLine){ alert('Per salvare su iPhone servono internet e l\'accesso con Google. Le modifiche non sono state salvate.'); return false; }
+    const ref = F.doc(db, 'archivio', 'soci');
+    try{
+      const L = await F.runTransaction(db, async t=>{
+        const d = await t.get(ref), soci = JSON.parse(d.data().j), s = soci.find(x=>x.id===id);
+        if(!s) throw new Error('socio non trovato');
+        cambia(s);
+        const j = JSON.stringify(soci);
+        t.set(ref, {j, t: F.serverTimestamp(), da: Sync.email});
+        return j;
+      });
+      remoto.soci = L; applicaDoc('soci', L); base = base || {}; segna('soci', imp(L));
+      S.savedAt = new Date().toISOString(); saveLocal(); salvaBase();
+      return true;
+    }catch(e){ console.warn(e); alert('Non salvato: '+(e.code || e.message)+'. Riprova.'); return false; }
+  };
+
   function riconcilia(){
+    if(IPHONE) return specchioIPhone();
     clearTimeout(timer); timer = null;
     if(!pronto || Sync.stato!=='collegato') return;
     const locale = docsArchivio();

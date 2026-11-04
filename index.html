@@ -192,6 +192,7 @@ legend{font-weight:600;padding:0 6px}
 .esiti .vince{background:var(--gold);padding:8px 10px;border-radius:6px;font-weight:700;font-size:16px}
 /* finestre: il contenuto resta sempre dentro il riquadro bianco e scorre se lo schermo è basso (es. netbook 1024×600) */
 dialog{border:0;border-radius:10px;padding:0;width:640px;max-width:94vw;max-height:94vh;overflow:hidden;box-sizing:border-box;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+dialog.larga{width:820px;max-width:calc(94vw / var(--zoom,1))}
 dialog *{box-sizing:border-box}
 dialog::backdrop{background:rgba(20,30,28,.45)}
 #dlgForm{padding:16px;max-height:94vh;overflow-y:auto;overflow-x:hidden}
@@ -873,6 +874,7 @@ function openDlg(title, body, onSave, extraBtns, etichettaSalva){
   $('#dlgBody').innerHTML = body;
   $('#dlgBtns').innerHTML = (extraBtns||'') + '<span class="sp"></span><button type="button" class="btn" onclick="closeDlg()">'+(onSave?'Annulla':'Chiudi')+'</button>' + (onSave?'<button class="btn primary" type="submit">'+esc(etichettaSalva||'Salva')+'</button>':'');
   dlgSave = onSave;
+  $('#dlg').classList.remove('larga');
   $('#dlg').showModal();
   const f = $('#dlgBody').querySelector('input:not([type=hidden]):not([type=checkbox]),select,textarea'); if(f) f.focus();
 }
@@ -2648,6 +2650,7 @@ function openProposta(y){
       if(!p2.righe.some(r=>r.a||r.b)){ alert('Inserisci almeno una data.'); return false; }
       closeDlg(); printRaw(htmlProposta(+d.anno, p2));
   }, '<button type="button" class="btn" onclick="creaGareProposta()">Crea le gare</button>', 'Stampa foglio');
+  $('#dlg').classList.add('larga');
   $('#dlgForm').dataset.anno = y;
   $('#dlgForm').fondo.dataset.auto = fondoProposta(Object.assign({}, p, {fondo:''}));
 }

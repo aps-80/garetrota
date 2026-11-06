@@ -193,6 +193,20 @@ legend{font-weight:600;padding:0 6px}
 /* finestre: il contenuto resta sempre dentro il riquadro bianco e scorre se lo schermo è basso (es. netbook 1024×600) */
 dialog{border:0;border-radius:10px;padding:0;width:640px;max-width:94vw;max-height:94vh;overflow:hidden;box-sizing:border-box;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.3)}
 dialog.larga{width:820px;max-width:calc(94vw / var(--zoom,1))}
+dialog.fotodlg{width:calc(96vw / var(--zoom,1));max-width:calc(96vw / var(--zoom,1))}
+.fotocontrollo{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);grid-gap:12px;height:calc(94vh - 125px)}
+.fotofoto,.fotovalori{min-height:0;min-width:0;display:flex;flex-direction:column}
+.fotoscroll{flex:1;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:6px;background:#eee}
+.fotowrap{position:relative}
+.fotowrap img{display:block;width:100%}
+.fotowrap svg{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+.fotowrap polygon{fill:rgba(255,190,0,.3);stroke:#c62828;stroke-width:3}
+.fotoscorri{flex:1;min-height:0;overflow:auto}
+.fotoscorri input[type=checkbox]{width:22px;height:22px}
+.fotodubbio td{background:var(--warnbg)}
+.fotosel td{outline:2px solid var(--accent);outline-offset:-2px}
+.fotonota{font-size:12px;color:#7a4b00;font-weight:600}
+@media (max-width:700px){.fotocontrollo{grid-template-columns:1fr;height:auto}.fotoscroll{max-height:40vh}}
 dialog *{box-sizing:border-box}
 dialog::backdrop{background:rgba(20,30,28,.45)}
 #dlgForm{padding:16px;max-height:94vh;overflow-y:auto;overflow-x:hidden}
@@ -875,7 +889,7 @@ function openDlg(title, body, onSave, extraBtns, etichettaSalva){
   $('#dlgBtns').innerHTML = (extraBtns||'') + '<span class="sp"></span><button type="button" class="btn" onclick="closeDlg()">'+(onSave?'Annulla':'Chiudi')+'</button>' + (onSave?'<button class="btn primary" type="submit">'+esc(etichettaSalva||'Salva')+'</button>':'');
   dlgSave = onSave;
   $('#dlg').classList.remove('larga');
-  $('#dlg').showModal();
+  if(!$('#dlg').open) $('#dlg').showModal();
   const f = $('#dlgBody').querySelector('input:not([type=hidden]):not([type=checkbox]),select,textarea'); if(f) f.focus();
 }
 function closeDlg(){ if($('#dlg').open) $('#dlg').close(); }
@@ -901,7 +915,8 @@ const ICONE = {
   coppa:'<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4"/><path d="M12 13v4M8 21h8M10 17h4v4h-4z"/>',
   lucchetto:'<path d="M6 11h12v9H6z"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
   spunta:'<path d="M4 4h16v16H4z"/><path d="M8 12l3 3 5-6"/>',
-  palline:'<circle cx="8" cy="8" r="4"/><circle cx="16" cy="16" r="4"/><circle cx="17" cy="6" r="2"/>'
+  palline:'<circle cx="8" cy="8" r="4"/><circle cx="16" cy="16" r="4"/><circle cx="17" cy="6" r="2"/>',
+  foto:'<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="4"/>'
 };
 function icona(k){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONE[k]||''}</svg>`; }
 // voce = [colore ('fa' fare, 'st' stampare, 'va' andare, 'ind' indietro), icona, testo, azione al clic, riga piccola sotto]
@@ -1041,6 +1056,7 @@ const soc = {q:'', tipo:'tutti', nonPagata:false, eliminati:false, mancanti:fals
 function viewSoci(){
   return `<div class="toolbar"><h2>Soci</h2></div>
   ${menuSezione([['fa','piu','Nuovo socio',"editSocio()"],
+    fotoDisponibile() && ['fa','foto','Leggi modulo da foto',"fotoApri('modulo')"],
     ['st','stampa','Stampa rubrica soci',"printSoci()",'indirizzi e telefoni'],
     ['st','stampa','Modulo privacy',"openModuloIscrizione()",'da far firmare'],
     ['st','stampa','Tessere soci',"openTessere()",'10 per foglio, anche ristampa'],
@@ -1391,6 +1407,7 @@ function viewGara(){
     !g.chiusa && ['va','bilancia','Vai alla pesatura',`go('pesatura','${g.id}')`],
     ['va','coppa','Classifica',`go('classifiche',{tipo:'gara',id:'${g.id}'})`],
     ['fa','modifica','Modifica dati gara',`editGara('${g.id}')`],
+    !g.chiusa && fotoDisponibile() && ['fa','foto','Leggi foglio da foto',`fotoScegli('${g.id}')`,'giudice o pagamenti'],
     ['st','stampa','Stampa inizio gara',`printPagamentiEGiudice('${g.id}')`,'copertina, pagamenti, giudice'],
     ['st','stampa','Copertina',`printCopertina('${g.id}')`],
     ['st','stampa','Foglio pagamenti',`printPagamenti('${g.id}')`],
@@ -1492,7 +1509,12 @@ function nuovoPartecipante(gid, after){
 function findEntry(g, sid){ return g.iscritti.find(x=>x.socioId===sid); }
 function setPosto(gid, sid, v){ findEntry(gara(gid), sid).posto = v.trim(); save(); }
 function setPagato(gid, sid, v){
-  const g = gara(gid), e = findEntry(g, sid), anno = annoGara(g);
+  const g = gara(gid);
+  impostaPagato(g, findEntry(g, sid), v);
+  save(); render();
+}
+function impostaPagato(g, e, v){
+  const anno = annoGara(g);
   e.pagato = v;
   if(v){
     // pagando, chi non aveva la quota sociale dell'anno diventa socio in regola
@@ -1503,7 +1525,6 @@ function setPagato(gid, sid, v){
     (e.quotaSocioPagata||[]).forEach(x=>{ const s = socio(x.id); if(s && +s.quotaAnno===anno) s.quotaAnno = x.prev; });
     e.quotaSocioPagata = [];
   }
-  save(); render();
 }
 // "Solo quota": alla gara il socio paga soltanto l'iscrizione alla società, senza fare la gara
 function setSoloQuota(gid, sid, v){
@@ -1884,6 +1905,7 @@ function viewPesatura(){
     ['st','stampa','Stampa inizio gara',"printPagamentiEGiudice(pes.garaId)",'','Copertina, foglio pagamenti e foglio giudice'],
     ['st','stampa','Foglio pagamenti',"printPagamenti(pes.garaId)"],
     ['st','stampa','Foglio giudice',"printFoglio(pes.garaId)"],
+    fotoDisponibile() && ['fa','foto','Leggi foglio da foto',"fotoScegli(pes.garaId)"],
     ['fa','modifica','Costo trote',"editCostoPattuito(pes.garaId)",'<span id="pesCosto"></span>','Il costo calcolato, oppure quello pattuito col proprietario del lago']], true)}
   <div class="pesgrid">
     <div class="card pad0"><div class="pesSearch"><input id="pesQ" type="search" placeholder="N. borsa o nome · Esc" autocomplete="off"${TABLET && !pes.lettere ? ' inputmode="numeric"' : ''}>${TABLET ? `<button type="button" class="btn sm" style="margin-right:6px" onclick="cambiaTastieraPes()" title="Tastiera con i numeri o con le lettere">${pes.lettere ? '123' : 'ABC'}</button>` : ''}<button class="btn sm" onclick="openIscrivi()" title="Aggiungi un partecipante">+ Iscrivi</button></div><div id="pesList" class="peslist"></div></div>
@@ -2538,7 +2560,9 @@ con questa lettera, ai sensi dell’ articolo 13 del Regolamento (UE) 2016/679 (
 
 **Finalità.** I Suoi dati verranno inseriti nel nostro Archivio informatico ed utilizzati esclusivamente per la gestione del rapporto associativo (tesseramento, iscrizione alle gare, classifiche) e per l’ invio gratuito di lettere o altre comunicazioni inerenti alla nostra attività di associazione di pesca sportiva. Il nome dei soci e i risultati delle gare compaiono nelle classifiche consegnate ai soci.
 
-**Conservazione.** I dati non vengono ceduti a terzi né diffusi, e sono conservati per la durata dell’ iscrizione e, in seguito, solo per il tempo richiesto dalla legge. Il conferimento dei dati è necessario per l’ iscrizione alla Società.
+**Fornitori.** I dati non vengono venduti né diffusi. Per gestire l’ archivio e le gare ci serviamo di fornitori tecnici che li trattano per nostro conto: Google (archivio informatico) e, per i moduli e i fogli di gara acquisiti da fotografia, Microsoft (lettura automatica con un servizio di intelligenza artificiale, nell’ Unione Europea, con cancellazione entro 24 ore) e Cloudflare (trasmissione). Alcuni fornitori possono trattare dati anche fuori dall’ Unione Europea, con le garanzie previste dal GDPR. I dati letti vengono controllati da una persona prima del salvataggio.
+
+**Conservazione.** I dati sono conservati per la durata dell’ iscrizione e, in seguito, solo per il tempo richiesto dalla legge. Il conferimento dei dati è necessario per l’ iscrizione alla Società.
 
 **I Suoi diritti.** In qualsiasi momento potrà chiedere di consultare, correggere o cancellare i Suoi dati, oppure limitarne o opporsi al loro utilizzo (articoli da 15 a 22 del GDPR), con semplice richiesta da inviare a: A.P.S. 80, {indirizzo_titolare}. Ha inoltre diritto di presentare reclamo al Garante per la protezione dei dati personali (www.garanteprivacy.it).
 
@@ -3611,6 +3635,493 @@ function loadDemo(){
   save(); render(); toast('Dati di prova caricati');
 }
 
+/* ================= LETTURA DA FOTO ================= */
+/* FOTO-PURO-INIZIO: legge la risposta di Azure Layout (nessun collegamento con la pagina) */
+const FOTO_DUBBIO_PAROLA = 0.8, FOTO_DUBBIO_SPUNTA = 0.7;
+function fotoMediana(a){ if(!a.length) return 0; const b = a.slice().sort((x,y)=>x-y); return b[Math.floor(b.length/2)]; }
+function fotoRetta(punti){ // retta y = a + b*x ai minimi quadrati
+  const n = punti.length; if(!n) return {a:0, b:0};
+  let sx=0, sy=0, sxx=0, sxy=0; punti.forEach(([x,y])=>{ sx+=x; sy+=y; sxx+=x*x; sxy+=x*y; });
+  const den = n*sxx - sx*sx;
+  if(n<2 || Math.abs(den)<1e-6) return {a:sy/n, b:0};
+  const b = (n*sxy - sx*sy)/den; return {a:(sy-b*sx)/n, b};
+}
+function fotoRettaRobusta(punti){ // toglie i punti storti e rifà il conto
+  const r = fotoRetta(punti), scarti = punti.map(([x,y])=>Math.abs(y-(r.a+r.b*x))), m = fotoMediana(scarti);
+  const buoni = punti.filter((p,i)=>scarti[i] <= Math.max(m*2.5, 1e-3));
+  return buoni.length>=2 ? fotoRetta(buoni) : r;
+}
+function fotoNorm(s){ return String(s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Z0-9]+/g,' ').trim(); }
+// giro di 90/180/270 gradi quando il foglio è stato fotografato girato: i conti si fanno sul foglio dritto
+function fotoGiro(pagina){
+  const k = ((Math.round((pagina.angle||0)/90) % 4) + 4) % 4, W = pagina.width, H = pagina.height;
+  return k===1 ? (x,y)=>[y, W-x] : k===2 ? (x,y)=>[W-x, H-y] : k===3 ? (x,y)=>[H-y, x] : (x,y)=>[x,y];
+}
+function fotoCentro(poly, giro){
+  let sx=0, sy=0; const n = poly.length/2;
+  for(let i=0;i<poly.length;i+=2){ const [x,y] = giro(poly[i],poly[i+1]); sx+=x; sy+=y; }
+  return {x:sx/n, y:sy/n};
+}
+function fotoSequenza(punti){ // i numeri di borsa devono crescere scendendo nel foglio: toglie quelli letti male
+  const v = punti.slice().sort((a,b)=>a.y-b.y), lung = v.map(()=>1), prima = v.map(()=>-1);
+  let top = -1;
+  v.forEach((p,i)=>{ for(let j=0;j<i;j++) if(v[j].n<p.n && lung[j]+1>lung[i]){ lung[i]=lung[j]+1; prima[i]=j; } if(top<0 || lung[i]>lung[top]) top=i; });
+  const out = []; for(let i=top;i>=0;i=prima[i]) out.unshift(v[i]);
+  return out;
+}
+function fotoTabellaPrincipale(ar){ return (ar.tables||[]).slice().sort((a,b)=>(b.rowCount||0)-(a.rowCount||0))[0] || null; }
+// colonne: cerca le intestazioni nelle prime righe della tabella
+function fotoColonne(t){
+  const nomi = {borsa:/BORSA/, trote:/TROTE/, peso:/PESO/, nome:/NOME/, quota:/QUOTA/, pagato:/PAGATO/, part:/PARTECIP/}, col = {testate:[]};
+  t.cells.filter(c=>c.rowIndex<=2).forEach(c=>{ const s = fotoNorm(c.content);
+    Object.keys(nomi).forEach(k=>{ if(col[k]===undefined && nomi[k].test(s)){ col[k] = [c.columnIndex, c.columnIndex+(c.columnSpan||1)]; col.testate.push(c); } }); });
+  return col;
+}
+// Griglia del foglio. Le righe della tabella di Azure a volte si spostano (foto storte), quindi ogni parola e
+// ogni spunta si assegna alla borsa guardando dove si trova: si segue la pendenza delle righe fino al numero di borsa.
+function fotoGriglia(ar){
+  const pagina = ar.pages && ar.pages[0], t = fotoTabellaPrincipale(ar);
+  if(!pagina || !t) return null;
+  const col = fotoColonne(t); if(col.borsa===undefined) return null;
+  const giro = fotoGiro(pagina), words = pagina.words||[];
+  const parole = c => { const sp = c.spans||[]; return words.filter(w=>sp.some(s=>w.span.offset>=s.offset && w.span.offset<s.offset+s.length)); };
+  const inCol = (c,k) => col[k]!==undefined && c.columnIndex>=col[k][0] && c.columnIndex<col[k][1];
+  // numeri di borsa
+  const punti = [];
+  t.cells.filter(c=>inCol(c,'borsa')).forEach(c=>parole(c).forEach(w=>{ if(/^\d{1,3}$/.test(w.content)){ const p = fotoCentro(w.polygon, giro); punti.push({n:+w.content, x:p.x, y:p.y, poly:w.polygon}); } }));
+  const seq = fotoSequenza(punti); if(seq.length<3) return null;
+  // borse non lette: stanno in mezzo alle vicine
+  const borse = [];
+  seq.forEach((p,i)=>{ if(i){ const q = seq[i-1]; for(let n=q.n+1;n<p.n;n++){ const f=(n-q.n)/(p.n-q.n); borse.push({n, x:q.x+(p.x-q.x)*f, y:q.y+(p.y-q.y)*f, stimata:true}); } } borse.push(p); });
+  const altezza = fotoMediana(borse.slice(1).map((p,i)=>p.y-borse[i].y));
+  // pendenza delle righe, che cambia salendo e scendendo nel foglio (prospettiva)
+  const pend = [];
+  t.cells.forEach(c=>{ const r = c.boundingRegions && c.boundingRegions[0]; if(!r) return; const q = r.polygon;
+    const [x0,y0] = giro(q[0],q[1]), [x1,y1] = giro(q[2],q[3]), [x3,y3] = giro(q[6],q[7]), [x2,y2] = giro(q[4],q[5]);
+    if(x1-x0>30) pend.push([(y0+y3)/2, (y1-y0)/(x1-x0)]);
+    if(x2-x3>30) pend.push([(y2+y3)/2, (y2-y3)/(x2-x3)]);
+  });
+  const fp = fotoRettaRobusta(pend);
+  const borsaDi = (x,y) => { let best=null, d=1e9;
+    borse.forEach(b=>{ const s = fp.a+fp.b*b.y, e = Math.abs(y-(b.y+s*(x-b.x))); if(e<d){ d=e; best=b; } });
+    return best ? {n:best.n, d:d/(altezza||1), b:best} : null; };
+  const righe = {};
+  const riga = n => righe[n] || (righe[n] = {n, poly:[]});
+  borse.forEach(b=>{ const r = riga(b.n); r.punto = b; if(b.stimata) r.stimata = true; });
+  // parole scritte nelle colonne
+  ['nome','quota','trote','peso'].forEach(k=>{ if(col[k]===undefined) return;
+    t.cells.filter(c=>inCol(c,k) && !col.testate.includes(c)).forEach(c=>parole(c).forEach(w=>{
+      if(fotoNorm(w.content)==='' ) return;
+      const p = fotoCentro(w.polygon, giro), a = borsaDi(p.x,p.y); if(!a || a.d>1.2) return;
+      const r = riga(a.n), v = r[k] || (r[k] = {parole:[], conf:1, lontano:false});
+      v.parole.push({t:w.content, x:p.x}); v.conf = Math.min(v.conf, w.confidence==null?1:w.confidence); if(a.d>0.45) v.lontano = true; r.poly.push(w.polygon);
+    })); });
+  Object.values(righe).forEach(r=>['nome','quota','trote','peso'].forEach(k=>{ if(r[k]) r[k].testo = r[k].parole.sort((a,b)=>a.x-b.x).map(x=>x.t).join(' '); }));
+  // spunte: la colonna si riconosce dalla posizione
+  if(col.pagato!==undefined){
+    const segni = (pagina.selectionMarks||[]).map(m=>{ const p = fotoCentro(m.polygon, giro), a = borsaDi(p.x,p.y); return {m, x:p.x, y:p.y, a}; }).filter(s=>s.a && s.a.d<=1.2);
+    const perBorsa = {}; segni.forEach(s=>(perBorsa[s.a.n]=perBorsa[s.a.n]||[]).push(s));
+    const sx = [], dx = [];
+    Object.values(perBorsa).forEach(v=>{ if(v.length===2){ v.sort((a,b)=>a.x-b.x); sx.push([v[0].y,v[0].x]); dx.push([v[1].y,v[1].x]); } });
+    const ls = fotoRettaRobusta(sx), ld = fotoRettaRobusta(dx);
+    segni.forEach(s=>{ const r = riga(s.a.n), k = Math.abs(s.x-(ls.a+ls.b*s.y)) <= Math.abs(s.x-(ld.a+ld.b*s.y)) ? 'pagato' : 'part';
+      const v = {sel:s.m.state==='selected', conf:s.m.confidence==null?1:s.m.confidence, lontano:s.a.d>0.45};
+      if(r[k]) v.doppio = true;
+      r[k] = v; r.poly.push(s.m.polygon); });
+  }
+  return {col, righe, giro};
+}
+// data scritta nel titolo del foglio ("15 Novembre 2026"); serve a controllare che il foglio sia della gara giusta
+function fotoDataFoglio(testo){
+  const mesi = ['GENNAIO','FEBBRAIO','MARZO','APRILE','MAGGIO','GIUGNO','LUGLIO','AGOSTO','SETTEMBRE','OTTOBRE','NOVEMBRE','DICEMBRE'];
+  const m = fotoNorm(String(testo||'').slice(0,250)).match(new RegExp('\\b(\\d{1,2}) ('+mesi.join('|')+') (\\d{4})\\b'));
+  return m ? `${m[3]}-${String(mesi.indexOf(m[2])+1).padStart(2,'0')}-${m[1].padStart(2,'0')}` : '';
+}
+function fotoQuotaLetta(s){ const m = String(s||'').match(/\d+(?:[.,]\d+)?/); return m ? Number(m[0].replace(',','.')) : null; }
+function fotoTipoFoglio(ar){
+  const c = fotoNorm(ar.content);
+  if(/COGNOME E NOME/.test(c) && /NATO IL|CAP CITTA/.test(c)) return 'modulo';
+  if(/PAGATO/.test(c) && /QUOTA/.test(c)) return 'pagamenti';
+  if(/TROTE/.test(c) && /PESO/.test(c)) return 'giudice';
+  return '';
+}
+function fotoNomeTitolo(s){ return String(s||'').toLowerCase().replace(/(^|[\s'\-])(\S)/g,(m,a,b)=>a+b.toUpperCase()); }
+// modulo privacy: i campi si cercano dall'etichetta scritta a sinistra
+function fotoLeggiModulo(ar){
+  const pagina = ar.pages && ar.pages[0], words = (pagina && pagina.words)||[], out = {};
+  const t = (ar.tables||[]).find(x=>x.cells.some(c=>/COGNOME E NOME/.test(fotoNorm(c.content))));
+  if(!t) return null;
+  const valore = lab => { const e = t.cells.find(c=>c.columnIndex===0 && lab.test(fotoNorm(c.content))); if(!e) return null;
+    const c = t.cells.find(x=>x.rowIndex===e.rowIndex && x.columnIndex>=1); if(!c) return null;
+    const sp = c.spans||[], ws = words.filter(w=>sp.some(s=>w.span.offset>=s.offset && w.span.offset<s.offset+s.length));
+    return {testo:String(c.content||'').replace(/:(un)?selected:/g,' ').replace(/\s+/g,' ').trim(), conf:ws.reduce((m,w)=>Math.min(m,w.confidence==null?1:w.confidence),1), poly:c.boundingRegions&&c.boundingRegions[0]?c.boundingRegions[0].polygon:null}; };
+  const campo = (k,testo,base,dubbio) => { out[k] = {v:testo||'', dubbio:!!dubbio || !!(base && testo && base.conf<FOTO_DUBBIO_PAROLA), poly:base?base.poly:null}; };
+  const n = valore(/^COGNOME E NOME/), i = valore(/^INDIRIZZO/), c = valore(/^CAP/), na = valore(/^NATO/), te = valore(/^TEL/);
+  const nomiTok = n ? n.testo.split(' ').filter(Boolean) : [];
+  campo('cognome', fotoNomeTitolo(nomiTok[0]||''), n, nomiTok.length!==2);
+  campo('nome', fotoNomeTitolo(nomiTok.slice(1).join(' ')), n, nomiTok.length!==2);
+  campo('indirizzo', i ? fotoNomeTitolo(i.testo.replace(/(^|\s)n\s*[°º.o]?(?=\s|$)/gi,' ').replace(/\s+/g,' ').trim()) : '', i);
+  let cit = c ? c.testo : '', cap = '', prov = '';
+  const mc = cit.match(/\b\d{5}\b/); if(mc){ cap = mc[0]; cit = cit.replace(mc[0],' '); }
+  const mp = cit.match(/\(?\b([A-Za-z]{2})\b\)?\s*$/); if(mp && cit.trim().length>mp[0].length){ prov = mp[1].toUpperCase(); cit = cit.slice(0, mp.index); }
+  campo('cap', cap, c); campo('citta', fotoNomeTitolo(cit.replace(/\s+/g,' ').trim()), c); campo('provincia', prov, c);
+  campo('telefono', te ? te.testo.replace(/[^\d+ ]/g,'').replace(/\s+/g,' ').trim() : '', te);
+  const data = /\b\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}\b/;
+  let nato = na ? na.testo : '', natoIl = '';
+  const md = nato.match(data); if(md){ natoIl = md[0]; nato = nato.replace(md[0],' '); }
+  campo('natoIl', natoIl, na);
+  campo('natoA', fotoNomeTitolo(nato.split(' ').filter(p=>p && p.toLowerCase()!=='a').join(' ')), na);
+  const dr = valore(/^DATA/); let firma = dr ? dr.testo : '';
+  if(!data.test(firma)){ const co = String(ar.content||'').match(/\bData\b\s*([^\n]*)/); firma = co ? co[1] : ''; }
+  const mf = firma.match(data); campo('dataFirma', mf ? mf[0] : '', dr, !mf);
+  return out;
+}
+/* FOTO-PURO-FINE */
+/* ---- schermate: foto, invio, controllo e salvataggio. Fuori da qui, nel resto dell'app, ci sono solo i tre pulsanti. ---- */
+// FOTO_ATTIVA resta false finché contratti e informativa non sono approvati: i pulsanti non compaiono.
+const FOTO_ATTIVA = false;
+const FOTO_URL = 'https://garetrota-foto.djbighouse96.workers.dev'; // indirizzo del Worker (worker-foto)
+// solo per le prove sul PC, con dati inventati: http://localhost/?fotoprova=1
+const FOTO_PROVA = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /[?&]fotoprova=1/.test(location.search);
+const FOTO_TITOLI = {giudice:'Foglio giudice', pagamenti:'Foglio pagamenti', modulo:'Modulo privacy'};
+// collaudo con Azure vero prima dell'accensione: indirizzo del sito con ?fotocollaudo=1, solo con un foglio inventato e senza salvare
+const FOTO_COLLAUDO = /[?&]fotocollaudo=1/.test(location.search);
+function fotoDisponibile(){ return !IPHONE && !!(FOTO_PROVA || ((FOTO_ATTIVA || FOTO_COLLAUDO) && FOTO_URL)); }
+let fotoS = null;
+function fotoPulisci(){
+  if(fotoS){ clearInterval(fotoS.timer); if(fotoS.ctrl) fotoS.ctrl.abort(); if(fotoS.url) URL.revokeObjectURL(fotoS.url); }
+  fotoS = null; $('#dlg').classList.remove('fotodlg');
+}
+$('#dlg').addEventListener('close', ()=>{ if(fotoS && !$('#dlg').open) fotoPulisci(); });
+$('#dlg').addEventListener('cancel', e=>{ if(fotoS && fotoS.controllo && !fotoConfermaUscita()) e.preventDefault(); });
+function fotoConfermaUscita(){ return confirm('Chiudere senza salvare? I valori letti da questa foto andranno persi.'); }
+function fotoScegli(gid){
+  openDlg('Leggi foglio da foto', `<p>Quale foglio vuoi fotografare?</p><div class="btnrow">
+    <button type="button" class="btn primary big" onclick="fotoApri('giudice','${gid}')">Foglio giudice</button>
+    <button type="button" class="btn primary big" onclick="fotoApri('pagamenti','${gid}')">Foglio pagamenti</button></div>`, null);
+}
+function fotoApri(tipo, gid){ fotoPulisci(); fotoS = {tipo, gid, zoom:100}; fotoSchermataScatto(); }
+function fotoSchermataScatto(avviso){
+  const s = fotoS; if(!s) return;
+  clearInterval(s.timer); s.controllo = false;
+  $('#dlg').classList.remove('fotodlg');
+  const modulo = s.tipo==='modulo';
+  const senzaRete = !navigator.onLine;
+  openDlg('Leggi da foto: '+FOTO_TITOLI[s.tipo], `${avviso?`<div class="alert warn">${esc(avviso)}</div>`:''}
+    ${senzaRete?'<div class="alert warn"><b>Manca internet.</b> Per leggere la foto serve internet: puoi farlo più tardi, oppure inserire i dati a mano.</div>':''}
+    ${modulo?`<div class="alert info"><b>Da fotografia si leggono solo i moduli con il testo nuovo</b>, quello che nomina i fornitori (Google, Microsoft e Cloudflare). I moduli vecchi, e quelli di chi chiede di non usare la fotografia, si inseriscono a mano con "Nuovo socio".
+      <label class="chk" style="margin-top:8px"><input type="checkbox" id="fotoTesto"> Questo modulo ha il testo nuovo e il socio non ha chiesto l'inserimento a mano</label></div>`:''}
+    ${modulo?'':'<div class="alert info"><b>Prima dello scatto:</b> se sul foglio c\'è chi ha chiesto l\'inserimento a mano, copri bene il suo nome a penna. La foto parte intera.</div>'}
+    <p>Inquadra tutto il foglio, il più dritto possibile e con buona luce. La foto viene mandata a Microsoft per la lettura. Poi controlli i valori accanto alla foto: <b>si salva solo dopo la tua conferma</b>.</p>
+    <div class="btnrow"><label class="btn primary big" style="cursor:pointer">Scatta la foto<input type="file" accept="image/*" capture="environment" style="display:none" onchange="fotoScelta(this)"></label>
+    <label class="btn big" style="cursor:pointer">Scegli un file<input type="file" accept="image/*" style="display:none" onchange="fotoScelta(this)"></label></div>`, null);
+}
+function fotoAttesa(testo){ openDlg('Leggi da foto', `<p><b>${esc(testo)}</b></p><p class="muted small">Non chiudere questa finestra.</p>`, null); }
+function fotoRiduci(file){
+  return new Promise((ok, no)=>{
+    const u = URL.createObjectURL(file), img = new Image();
+    img.onerror = ()=>{ URL.revokeObjectURL(u); no(new Error('foto')); };
+    img.onload = async ()=>{
+      URL.revokeObjectURL(u);
+      try{
+        const W = img.naturalWidth, H = img.naturalHeight; let lato = 2600, q = .85;
+        for(let i=0;i<6;i++){
+          const k = Math.min(1, lato/Math.max(W,H)), c = document.createElement('canvas');
+          c.width = Math.round(W*k); c.height = Math.round(H*k);
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          const blob = await new Promise(r=>c.toBlob(r, 'image/jpeg', q));
+          if(blob && blob.size <= 3800000) return ok({blob});
+          lato *= .8; q = Math.max(.6, q-.1);
+        }
+        no(new Error('grande'));
+      }catch(e){ no(e); }
+    };
+    img.src = u;
+  });
+}
+async function fotoScelta(inp){
+  const f = inp.files[0], s = fotoS; if(!f || !s) return;
+  if(s.tipo==='modulo' && !$('#fotoTesto').checked){ inp.value = ''; alert('Da fotografia si leggono solo i moduli con il testo nuovo: spunta la casella, oppure inserisci i dati a mano con "Nuovo socio".'); return; }
+  fotoAttesa('Preparo la foto...');
+  try{
+    const p = await fotoRiduci(f); if(fotoS!==s) return;
+    s.blob = p.blob; if(s.url) URL.revokeObjectURL(s.url); s.url = URL.createObjectURL(p.blob);
+    fotoInvia();
+  }catch(e){ console.warn(e); if(fotoS===s) fotoSchermataScatto('Questo file non si apre: usa una foto JPG o PNG.'); }
+}
+function fotoErrore(testo, attesa){
+  const s = fotoS; if(!s) return;
+  clearInterval(s.timer);
+  openDlg('Leggi da foto: '+FOTO_TITOLI[s.tipo], `<div class="alert warn">${esc(testo)}</div><p class="muted small">La foto è ancora qui: non serve rifarla.</p><p id="fotoConta"><b></b></p>`, null,
+    '<button type="button" class="btn primary" id="fotoRiprova" onclick="fotoInvia()">Riprova</button><button type="button" class="btn" onclick="fotoSchermataScatto()">Fai un\'altra foto</button>');
+  if(attesa > 0){
+    const b = $('#fotoRiprova'), c = $('#fotoConta b'); let n = attesa; b.disabled = true;
+    const passa = ()=>{ if(n<=0){ clearInterval(s.timer); b.disabled = false; c.textContent = 'Ora puoi riprovare.'; return; } c.textContent = `Puoi riprovare tra ${n} secondi.`; n--; };
+    passa(); s.timer = setInterval(passa, 1000);
+  }
+}
+async function fotoInvia(){
+  const s = fotoS; if(!s || !s.blob) return;
+  clearInterval(s.timer);
+  if(!navigator.onLine) return fotoErrore('Manca internet: per leggere la foto serve il collegamento. Riprova quando c\'è.');
+  let token = null;
+  if(FOTO_PROVA) token = 'prova';
+  else { try{ token = Sync.token ? await Sync.token() : null; }catch(e){ console.warn(e); } }
+  if(fotoS!==s) return;
+  if(!token) return fotoErrore('Per leggere le foto devi accedere con Google.');
+  fotoAttesa('Sto leggendo il foglio: ci vogliono circa 5-10 secondi.');
+  const ctrl = s.ctrl = new AbortController(), tempo = setTimeout(()=>ctrl.abort(), 120000);
+  try{
+    const r = await fetch(FOTO_PROVA ? '/leggi' : FOTO_URL.replace(/\/+$/,'')+'/leggi', {method:'POST', headers:{Authorization:'Bearer '+token, 'Content-Type':'image/jpeg'}, body:s.blob, signal:ctrl.signal});
+    const j = await r.json().catch(()=>({}));
+    if(fotoS!==s) return;
+    if(r.status===429) return fotoErrore('Il servizio gratuito legge poche foto al minuto e per ora ha raggiunto il limite. Basta aspettare un po\'.', j.attesa||40);
+    if(r.status===401) return fotoErrore('Accesso non valido: esci da Google, rientra e riprova.');
+    if(r.status===403) return fotoErrore('Questa email non è ammessa alla lettura delle foto.');
+    if(r.status===413) return fotoErrore('La foto è troppo grande: fanne un\'altra.');
+    if(r.status===422) return fotoErrore('Il servizio non è riuscito a leggere questa foto: fanne un\'altra.');
+    if(!r.ok || !j.analyzeResult) return fotoErrore('Il servizio di lettura non risponde. Riprova tra poco.');
+    s.ar = j.analyzeResult;
+    const letto = fotoTipoFoglio(s.ar);
+    if(letto!==s.tipo) return fotoSchermataScatto(`Questa foto non sembra il ${FOTO_TITOLI[s.tipo].toLowerCase()}. Controlla il foglio e rifai la foto.`);
+    fotoControllo();
+  }catch(e){
+    if(fotoS!==s) return;
+    console.warn(e);
+    fotoErrore('Il collegamento si è interrotto. Controlla internet e riprova.');
+  }finally{ clearTimeout(tempo); }
+}
+/* ---- controllo: foto e valori affiancati ---- */
+function fotoCornice(titolo, corpo, onSave, etichetta){
+  const s = fotoS, p = s.ar.pages[0];
+  openDlg(titolo, `<div class="fotocontrollo" onkeydown="if(event.key==='Enter')event.preventDefault()"><div class="fotofoto">
+      <div class="toolbar" style="margin:0 0 6px"><span class="small muted">Tocca una riga per vederla sulla foto</span><span class="sp"></span>
+        <button type="button" class="btn sm" onclick="fotoZoom(-50)" title="Rimpicciolisci">-</button><button type="button" class="btn sm" onclick="fotoZoom(50)" title="Ingrandisci">+</button></div>
+      <div class="fotoscroll" id="fotoScroll"><div class="fotowrap" id="fotoWrap" style="width:${s.zoom}%"><img src="${s.url}" alt="Foto del foglio"><svg viewBox="0 0 ${p.width} ${p.height}" id="fotoSegni"></svg></div></div>
+    </div><div class="fotovalori">${corpo}</div></div>`, onSave, '', etichetta);
+  $('#dlg').classList.add('fotodlg');
+  s.controllo = true;
+  // la finestra mette il cursore nella prima casella: qui deve aprirsi dall'inizio dell'elenco
+  if(document.activeElement) document.activeElement.blur();
+  $('#fotoSegni').innerHTML = '';
+  document.querySelectorAll('#dlgBody .fotosel').forEach(x=>x.classList.remove('fotosel'));
+  document.querySelectorAll('#dlgBody .fotoscorri').forEach(x=>{ x.scrollTop = 0; });
+  $('#fotoScroll').scrollTop = 0;
+  const ann = $('#dlgBtns .sp + .btn'); if(ann) ann.onclick = ()=>{ if(fotoConfermaUscita()) closeDlg(); };
+}
+function fotoZoom(d){ const s = fotoS; s.zoom = Math.min(400, Math.max(100, s.zoom+d)); $('#fotoWrap').style.width = s.zoom+'%'; }
+function fotoSegna(ev){
+  const tr = ev.target.closest && ev.target.closest('[data-poly]'); if(!tr) return;
+  document.querySelectorAll('#dlgBody .fotosel').forEach(x=>x.classList.remove('fotosel')); tr.classList.add('fotosel');
+  const poli = JSON.parse(tr.dataset.poly), box = $('#fotoSegni'), sc = $('#fotoScroll'), p = fotoS.ar.pages[0]; if(!poli.length) return;
+  box.innerHTML = poli.map(q=>`<polygon points="${q.join(' ')}"/>`).join('');
+  const xs = poli.flatMap(q=>q.filter((v,i)=>i%2===0)), ys = poli.flatMap(q=>q.filter((v,i)=>i%2===1));
+  const k = $('#fotoWrap').clientWidth/p.width, cx = (Math.min(...xs)+Math.max(...xs))/2, cy = (Math.min(...ys)+Math.max(...ys))/2;
+  sc.scrollTo({left:cx*k-sc.clientWidth/2, top:cy*k-sc.clientHeight/2, behavior:'smooth'});
+}
+const fotoAttr = (dubbi, poli) => `class="${dubbi.length?'fotodubbio':''}" data-poly="${esc(JSON.stringify(poli))}"`;
+const fotoNota = dubbi => dubbi.length ? dubbi.map(x=>`<div>${esc(x)}</div>`).join('') : '';
+function fotoSocioDaNome(testo){
+  const t = fotoNorm(testo).split(' ').filter(Boolean).sort().join(' '); if(!t) return null;
+  return sociAttivi().find(x=>fotoNorm(nome(x)).split(' ').filter(Boolean).sort().join(' ')===t) || null;
+}
+function fotoNomeDiverso(letto, archivio){
+  const a = fotoNorm(letto).split(' ').filter(p=>p.length>1), b = fotoNorm(archivio).split(' '); if(!a.length) return false;
+  return !a.some(p=>b.includes(p));
+}
+function fotoPoliRiga(r){ const v = r.poly.slice(); if(r.punto && r.punto.poly) v.unshift(r.punto.poly); return v; }
+// riga con una borsa ancora senza iscritto: si sceglie il socio, oppure se ne crea uno nuovo
+function fotoCellaSocio(g, i, r){
+  const letto = r.nome ? r.nome.testo : '', tok = letto.split(' ').filter(Boolean), trovato = letto ? fotoSocioDaNome(letto) : null, nuovo = !!letto && !trovato;
+  const altri = sociAttivi().filter(x=>!isIscritto(g, x.id));
+  return `<select name="s${i}" style="max-width:190px" onchange="this.nextElementSibling.style.display=this.value==='nuovo'?'':'none'">
+      <option value="">Scegli il socio...</option><option value="nuovo" ${nuovo?'selected':''}>Nuovo socio</option>
+      ${altri.map(x=>`<option value="${x.id}" ${trovato&&trovato.id===x.id?'selected':''}>${esc(nome(x))}</option>`).join('')}</select>
+    <div style="${nuovo?'':'display:none'};margin-top:4px"><input name="c${i}" placeholder="Cognome" value="${esc(fotoNomeTitolo(tok[0]||''))}" style="width:95px"> <input name="n${i}" placeholder="Nome" value="${esc(fotoNomeTitolo(tok.slice(1).join(' ')))}" style="width:95px"></div>`;
+}
+function fotoControllaLibera(i, d, usati, n){
+  const v = d['s'+i];
+  if(v==='nuovo' && (!d['c'+i] || !d['n'+i])){ alert(`Borsa ${n}: per il nuovo socio servono cognome e nome.`); return false; }
+  if(v && v!=='nuovo'){ if(usati.has(v)){ alert(`Borsa ${n}: questo socio è già stato scelto per un'altra borsa.`); return false; } usati.add(v); }
+  return true;
+}
+function fotoIscrivi(g, n, i, d){
+  const v = d['s'+i], nuovo = v==='nuovo'; let sid = v;
+  if(nuovo){ sid = uid(); S.soci.push({id:sid, numero:nextNumeroSocio(), quotaAnno:'', tipo:'adulto', cognome:d['c'+i], nome:d['n'+i], telefono:'', email:'', indirizzo:'', cap:'', citta:'', note:''}); }
+  const e = addToGara(g, sid, nuovo); if(!e) return null;
+  e.borsa = n; g.borse[sid] = n; return e;
+}
+function fotoAvvisoGara(g){
+  const d = fotoDataFoglio(fotoS.ar.content);
+  return d && d!==g.data ? `<div class="alert warn"><b>Attenzione:</b> il foglio dice ${esc(fmtDate(d))}, ma stai salvando nella gara del ${esc(fmtDate(g.data))}. Controlla che sia quella giusta.</div>` : '';
+}
+function fotoControllo(){
+  const s = fotoS;
+  if(s.tipo==='modulo') return fotoControlloModulo();
+  const griglia = fotoGriglia(s.ar);
+  if(!griglia) return fotoSchermataScatto('Non trovo la tabella con i numeri di borsa: rifai la foto inquadrando tutto il foglio.');
+  s.righe = Object.values(griglia.righe).sort((a,b)=>a.n-b.n);
+  if(s.tipo==='giudice') fotoControlloGiudice(); else fotoControlloPagamenti();
+}
+function fotoConfermaDubbi(n, dubbi){
+  if(!n){ toast('Nessuna modifica da salvare'); return false; }
+  return !dubbi || confirm(`Stai salvando ${n} righe, di cui ${dubbi} con dubbi (in giallo). Le hai controllate sulla foto?`);
+}
+/* ---- foglio giudice ---- */
+function fotoControlloGiudice(){
+  const s = fotoS, g = gara(s.gid), righe = [];
+  s.righe.forEach(r=>{
+    const t = r.trote ? r.trote.testo.replace(/\s/g,'') : '', p = r.peso ? r.peso.testo.replace(/\s/g,'') : '';
+    if(!t && !p) return;
+    const e = g.iscritti.find(x=>+x.borsa===r.n), dubbi = []; let salva = true;
+    const tn = /^\d+$/.test(t) ? +t : NaN, gr = parsePeso(p);
+    if((r.trote && r.trote.conf<FOTO_DUBBIO_PAROLA) || (r.peso && r.peso.conf<FOTO_DUBBIO_PAROLA)) dubbi.push('Lettura incerta');
+    if((r.trote && r.trote.lontano) || (r.peso && r.peso.lontano) || r.stimata) dubbi.push('Controlla che la riga sia giusta');
+    if(isNaN(tn)) dubbi.push('Numero di trote non chiaro');
+    if(gr===null || isNaN(gr)) dubbi.push('Peso non chiaro');
+    if(!isNaN(tn) && g.limiteTrote && tn>g.limiteTrote) dubbi.push(`Oltre il limite di ${g.limiteTrote} trote`);
+    if(tn>0 && gr>0){ const m = gr/tn; if(m<40 || m>5000) dubbi.push(`Peso medio strano: ${Math.round(m)} g a trota`); }
+    if(!e){ dubbi.push('Borsa senza iscritto'); salva = false; }
+    else {
+      if(r.nome && fotoNomeDiverso(r.nome.testo, entryName(e))) dubbi.push(`Sul foglio: ${r.nome.testo}`);
+      if(e.pesato && e.trote===tn && e.grammi===gr){ salva = false; }
+      else if(e.pesato){ dubbi.push(`In archivio: ${e.trote} trote, ${fmtG(e.grammi)} g`); salva = false; }
+    }
+    righe.push({r, e, t, p, dubbi, salva, uguale:!!(e && e.pesato && e.trote===tn && e.grammi===gr)});
+  });
+  s.lista = righe;
+  const corpo = `${fotoAvvisoGara(g)}<p class="small" style="margin:0 0 6px">Gara: <b>${esc(g.nome)}</b> (${fmtDate(g.data)}). Controlla le righe, soprattutto quelle in giallo. Si salvano solo quelle spuntate.</p>
+    <div class="fotoscorri"><table class="tbl"><thead><tr><th class="ctr">Borsa</th><th>Concorrente</th><th>Trote</th><th>Peso (${unit()})</th><th>Salva</th></tr></thead>
+    <tbody onclick="fotoSegna(event)" onfocusin="fotoSegna(event)">${righe.map((x,i)=>`<tr ${fotoAttr(x.dubbi, fotoPoliRiga(x.r))}><td class="ctr"><b>${x.r.n}</b></td>
+      <td>${x.e?esc(entryName(x.e)):fotoCellaSocio(g,i,x.r)}${fotoNota(x.dubbi)?`<div class="fotonota">${fotoNota(x.dubbi)}</div>`:''}${x.uguale?'<div class="muted small">Già uguale in archivio</div>':''}</td>
+      <td><input name="t${i}" value="${esc(x.t)}" inputmode="numeric" style="width:58px"></td><td><input name="p${i}" value="${esc(x.p)}" inputmode="decimal" style="width:82px"></td>
+      <td class="ctr"><input type="checkbox" name="v${i}" ${x.salva?'checked':''} aria-label="Salva borsa ${x.r.n}"></td></tr>`).join('') || '<tr><td colspan="5" class="empty">Sul foglio non ho trovato trote o pesi.</td></tr>'}</tbody></table></div>`;
+  fotoCornice('Controlla il foglio giudice', corpo, d=>{
+    const scelte = [], usati = new Set();
+    for(let i=0;i<righe.length;i++){
+      if(!d['v'+i]) continue;
+      const x = righe[i], n = x.r.n, tStr = d['t'+i], trote = tStr==='' ? NaN : Number(tStr);
+      if(!Number.isInteger(trote) || trote<0 || trote>999){ alert(`Borsa ${n}: scrivi il numero di trote (numero intero, anche 0).`); return false; }
+      let grammi = parsePeso(d['p'+i]); if(grammi===null) grammi = trote===0 ? 0 : NaN;
+      if(isNaN(grammi) || grammi<0){ alert(`Borsa ${n}: scrivi il peso in ${unit()}.`); return false; }
+      if(!x.e){ if(!d['s'+i]){ alert(`Borsa ${n}: scegli il socio, oppure togli la spunta.`); return false; } if(!fotoControllaLibera(i,d,usati,n)) return false; }
+      scelte.push({i, x, trote, grammi});
+    }
+    if(!fotoConfermaDubbi(scelte.length, scelte.filter(y=>y.x.dubbi.length).length)) return false;
+    scelte.forEach(y=>{ const e = y.x.e || fotoIscrivi(g, y.x.r.n, y.i, d); if(e) Object.assign(e, {trote:y.trote, grammi:y.grammi, pesato:true, assente:false, spareggio:null, pesatoAt:new Date().toISOString()}); });
+    save(); s.controllo = false; closeDlg(); render(); toast(`Salvate ${scelte.length} pesate`);
+  }, 'Salva le pesate');
+}
+/* ---- foglio pagamenti ---- */
+function fotoControlloPagamenti(){
+  const s = fotoS, g = gara(s.gid), righe = [];
+  s.righe.forEach(r=>{
+    const e = g.iscritti.find(x=>+x.borsa===r.n), sp = !!(r.pagato && r.pagato.sel), sa = !!(r.part && r.part.sel), nomeL = r.nome ? r.nome.testo : '';
+    if(!e && !sp && !sa && !nomeL) return;
+    const dubbi = [];
+    [r.pagato, r.part].forEach(v=>{ if(v && (v.conf<FOTO_DUBBIO_SPUNTA || v.lontano || v.doppio) && !dubbi.includes('Spunta incerta')) dubbi.push('Spunta incerta'); });
+    if(!r.pagato || !r.part) dubbi.push('Casella non trovata: guarda la foto');
+    if(r.stimata) dubbi.push('Controlla che la riga sia giusta');
+    if(nomeL && r.nome.conf<FOTO_DUBBIO_PAROLA) dubbi.push('Nome scritto incerto');
+    const ql = r.quota ? fotoQuotaLetta(r.quota.testo) : null;
+    if(e){
+      if(nomeL && fotoNomeDiverso(nomeL, entryName(e))) dubbi.push(`Sul foglio: ${nomeL}`);
+      const dov = dovuto(g, e).tot; if(ql!==null && Math.abs(ql-dov)>0.005) dubbi.push(`Quota letta ${r.quota.testo}, calcolata ${fmtDec2(dov)}`);
+      if(e.pagato && !sp) dubbi.push('In archivio risulta pagato, sul foglio no');
+      if(partecipa(e) && !sa && !e.pagato && !e.pesato) dubbi.push('In archivio ha partecipato, sul foglio no');
+      if(e.soloQuota) dubbi.push('Solo quota sociale: non si modifica da qui');
+    } else {
+      dubbi.push('Borsa senza iscritto');
+      if(r.quota) dubbi.push(`Quota scritta: ${r.quota.testo}`);
+    }
+    righe.push({r, e, sp, sa, dubbi});
+  });
+  s.lista = righe;
+  const corpo = `${fotoAvvisoGara(g)}<p class="small" style="margin:0 0 6px">Gara: <b>${esc(g.nome)}</b> (${fmtDate(g.data)}). Correggi le caselle guardando la foto: si salvano così come sono qui. La quota non si salva, la calcola il programma.</p>
+    <div class="fotoscorri"><table class="tbl"><thead><tr><th class="ctr">Borsa</th><th>Concorrente</th><th class="ctr">Pagato</th><th class="ctr">Ha part.</th></tr></thead>
+    <tbody onclick="fotoSegna(event)" onfocusin="fotoSegna(event)">${righe.map((x,i)=>{ const blocco = x.e && x.e.soloQuota ? 'disabled' : '';
+      return `<tr ${fotoAttr(x.dubbi, fotoPoliRiga(x.r))}><td class="ctr"><b>${x.r.n}</b></td>
+      <td>${x.e?esc(entryName(x.e)):fotoCellaSocio(g,i,x.r)}${fotoNota(x.dubbi)?`<div class="fotonota">${fotoNota(x.dubbi)}</div>`:''}</td>
+      <td class="ctr"><input type="checkbox" name="a${i}" ${x.sp||(x.e&&x.e.pagato)?'checked':''} ${blocco} aria-label="Pagato borsa ${x.r.n}"></td>
+      <td class="ctr"><input type="checkbox" name="b${i}" ${x.sa||(x.e&&partecipa(x.e))?'checked':''} ${blocco} aria-label="Ha partecipato borsa ${x.r.n}"></td></tr>`; }).join('')}</tbody></table></div>`;
+  fotoCornice('Controlla il foglio pagamenti', corpo, d=>{
+    const scelte = [], usati = new Set(); let senzaSocio = 0;
+    for(let i=0;i<righe.length;i++){
+      const x = righe[i], pag = !!d['a'+i], par = !!d['b'+i];
+      if(x.e){
+        if(x.e.soloQuota) continue;
+        if(pag===!!x.e.pagato && par===!!partecipa(x.e)) continue;
+      } else {
+        if(!d['s'+i]){ if(pag||par) senzaSocio++; continue; }
+        if(!fotoControllaLibera(i,d,usati,x.r.n)) return false;
+      }
+      scelte.push({i, x, pag, par});
+    }
+    if(senzaSocio && !confirm(`${senzaSocio} righe con la spunta non hanno un socio scelto e non verranno salvate. Continuare?`)) return false;
+    if(!fotoConfermaDubbi(scelte.length, scelte.filter(y=>y.x.dubbi.length).length)) return false;
+    scelte.forEach(y=>{
+      const e = y.x.e || fotoIscrivi(g, y.x.r.n, y.i, d); if(!e) return;
+      if(y.pag!==!!e.pagato) impostaPagato(g, e, y.pag);
+      if(y.pag || y.par) e.assente = false;
+      e.presente = y.par;
+    });
+    save(); s.controllo = false; closeDlg(); render(); toast(`Salvate ${scelte.length} righe`);
+  }, 'Salva i pagamenti');
+}
+/* ---- modulo privacy: i dati vanno nella scheda del socio ---- */
+const FOTO_CAMPI = [['cognome','Cognome'],['nome','Nome'],['indirizzo','Indirizzo'],['cap','CAP'],['citta','Città'],['provincia','Prov.'],['telefono','Telefono']];
+const FOTO_NOTE = [['natoIl','Nato il'],['natoA','Nato a'],['dataFirma','Data firma']];
+function fotoControlloModulo(){
+  const s = fotoS;
+  s.modulo = fotoLeggiModulo(s.ar);
+  if(!s.modulo) return fotoSchermataScatto('Non trovo i campi del modulo: rifai la foto inquadrando tutto il foglio.');
+  const t = fotoSocioDaNome(s.modulo.cognome.v+' '+s.modulo.nome.v);
+  s.socioId = t ? t.id : '';
+  const corpo = `<p class="small" style="margin:0 0 6px">Controlla i dati e che il modulo sia firmato. Nulla viene salvato finché non confermi.</p>
+    <label>Scheda del socio<select name="socio" onchange="fotoModuloSocio(this.value)" style="width:100%;margin-bottom:8px"><option value="">Nuovo socio</option>${sociAttivi().map(x=>`<option value="${x.id}" ${x.id===s.socioId?'selected':''}>${esc(nome(x))}</option>`).join('')}</select></label>
+    <div class="fotoscorri" id="fotoModulo">${fotoModuloTabella()}</div>
+    <label class="chk" style="margin-top:8px"><input type="checkbox" name="firmaOk"> Ho controllato sulla foto che il modulo è firmato</label>`;
+  fotoCornice('Controlla il modulo privacy', corpo, fotoSalvaModulo, 'Salva nella scheda');
+}
+function fotoModuloLeggiCampi(){ const s = fotoS; [...FOTO_CAMPI,...FOTO_NOTE].forEach(([k])=>{ const i = $(`#dlgBody [name="f_${k}"]`); if(i) s.modulo[k].v = i.value.trim(); }); }
+function fotoModuloSocio(id){ fotoModuloLeggiCampi(); fotoS.socioId = id; $('#fotoModulo').innerHTML = fotoModuloTabella(); }
+function fotoModuloScambia(){ fotoModuloLeggiCampi(); const m = fotoS.modulo, v = m.cognome.v; m.cognome.v = m.nome.v; m.nome.v = v; $('#fotoModulo').innerHTML = fotoModuloTabella(); }
+function fotoModuloTabella(){
+  const s = fotoS, m = s.modulo, sc = s.socioId ? socio(s.socioId) : null;
+  const riga = ([k,et], note) => { const c = m[k], ar = sc && !note ? String(sc[k]||'') : '', letto = c.v, uguale = !!sc && !note && ar===letto;
+    const diversa = !!sc && !note && !!ar && !uguale, dubbi = c.dubbio || diversa;
+    const att = c.poly ? [c.poly] : [];
+    return `<tr class="${dubbi?'fotodubbio':''}" data-poly="${esc(JSON.stringify(att))}"><td class="small">${et}</td><td><input name="f_${k}" value="${esc(letto)}" style="width:100%" ${k==='provincia'?'maxlength="2"':''}${k==='cap'?'maxlength="5"':''}></td>
+      <td class="small">${sc?(note?'<span class="muted">nelle note</span>':esc(ar)||'<span class="muted">vuoto</span>'):''}${diversa?' <b>diverso</b>':''}${c.dubbio?'<div class="fotonota">Lettura incerta</div>':''}</td>
+      <td class="ctr"><input type="checkbox" name="u_${k}" ${(letto && !uguale && !diversa)?'checked':''} aria-label="Usa ${et}"></td></tr>`; };
+  return `<table class="tbl"><thead><tr><th>Campo</th><th>Letto dalla foto</th><th>${sc?'In archivio':''}</th><th>Usa</th></tr></thead>
+    <tbody onclick="fotoSegna(event)" onfocusin="fotoSegna(event)">${FOTO_CAMPI.map(c=>riga(c,false)).join('')}${FOTO_NOTE.map(c=>riga(c,true)).join('')}</tbody></table>
+    <button type="button" class="btn sm" style="margin-top:6px" onclick="fotoModuloScambia()">Scambia cognome e nome</button>
+    ${sc?'':'<label style="display:block;margin-top:6px">Tipo <select name="tipo"><option value="adulto">Adulto</option><option value="pierino">Pierino (bambino)</option></select></label>'}`;
+}
+function fotoSalvaModulo(d){
+  const s = fotoS, id = d.socio, sc = id ? socio(id) : null;
+  if(!d.firmaOk){ alert('Controlla sulla foto che il modulo sia firmato e spunta la casella.'); return false; }
+  const val = k => k==='provincia' ? (d['f_'+k]||'').toUpperCase() : (d['f_'+k]||'');
+  if(!sc){
+    if(!val('cognome') || !val('nome')){ alert('Cognome e nome sono obbligatori.'); return false; }
+    const dup = fotoSocioDaNome(val('cognome')+' '+val('nome'));
+    if(dup && !confirm(`Esiste già un socio "${nome(dup)}". Crearne comunque uno nuovo?`)) return false;
+  }
+  const dati = {};
+  FOTO_CAMPI.forEach(([k])=>{ if(!sc || d['u_'+k]) dati[k] = (sc && !d['u_'+k]) ? sc[k] : (d['u_'+k] || k==='cognome' || k==='nome' ? val(k) : ''); });
+  if(sc && (dati.cognome==='' || dati.nome==='')){ alert('Cognome e nome non possono restare vuoti.'); return false; }
+  const righeNota = [];
+  if(d.u_natoIl && val('natoIl')) righeNota.push(`Nato il ${val('natoIl')}`+(d.u_natoA && val('natoA') ? ` a ${val('natoA')}` : ''));
+  else if(d.u_natoA && val('natoA')) righeNota.push(`Nato a ${val('natoA')}`);
+  if(d.u_dataFirma && val('dataFirma')) righeNota.push(`Modulo privacy firmato il ${val('dataFirma')}`);
+  const nota = (vecchia, nuove) => [vecchia||'', ...nuove.filter(x=>!(vecchia||'').includes(x))].filter(Boolean).join('\n');
+  if(sc){ Object.assign(sc, dati); sc.note = nota(sc.note, righeNota); }
+  else S.soci.push(Object.assign({id:uid(), numero:nextNumeroSocio(), quotaAnno:'', tipo:d.tipo==='pierino'?'pierino':'adulto', telefono:'', email:'', indirizzo:'', cap:'', citta:'', provincia:'', note:nota('', righeNota)}, dati));
+  save(); s.controllo = false; closeDlg(); render(); toast('Scheda del socio salvata');
+}
+/* ================= FINE LETTURA DA FOTO ================= */
+
 /* ================= AVVIO ================= */
 // service worker: l'app si apre anche senza internet (al campo).
 // Con una nuova VERSIONE non si ricarica da sola (si perderebbe una pesata a metà):
@@ -3814,6 +4325,8 @@ async function avvia(){
   };
   // iPhone, app sulla schermata Home: la finestra di Google può non tornare all'app
   Sync.accediStessaFinestra = ()=>{ closeDlg(); return Au.signInWithRedirect(auth, google); };
+  // token per il servizio che legge le foto (lo controlla il Worker)
+  Sync.token = ()=>auth.currentUser ? auth.currentUser.getIdToken() : null;
   function aiutoAccesso(){
     openDlg('Accesso con Google', `<p>L'accesso non è arrivato all'app.</p>
       <p>Prova <b>Accedi in questa finestra</b>. Se non funziona, usa l'app da Safari: apri <b>${esc(location.href.split('#')[0])}</b> e accedi lì.</p>`, null,

@@ -3060,11 +3060,13 @@ function boxCena(){
   const y = cen.anno || stagioneFinita(), c = cenaConti(y), r = contiCena(y), e = n => '€ ' + fmtDec2(n);
   const quotaLett = +cenaDati().quota || 0;
   const num = (k, t, w) => `<label class="chk">${t}&nbsp;<input type="text" inputmode="numeric" style="width:${w||80}px" value="${esc(c[k]!=null ? (k==='quota' ? fmtDec2(c[k]).replace(/\./g,'') : c[k]) : '')}"${k==='quota' ? ` placeholder="${fmtDec2(quotaLett)}"` : ''} onchange="setCena(${y},'${k}',this.value)"></label>`;
+  // partecipanti e non paganti: col pulsante + (il tastierino numerico del tablet non ha il più), il totale si vede a fianco
+  const persone = (k, t) => `<label class="chk">${t}&nbsp;${campoSomma(c[k]!=null ? String(c[k]) : '', `setCena(${y},'${k}',this.value)`, 80, true)}</label>`;
   return `<div class="card"><div class="toolbar"><h3 style="margin:0 8px 0 0">Conti della cena</h3>
       <select onchange="cen.anno=+this.value;render()">${anni().map(a=>`<option ${a===y?'selected':''}>${a}</option>`).join('')}</select>
       <span class="muted small">&nbsp;cena del ${fmtDate(dataCena(y))}</span></div>
     ${menuSezione([['st','stampa','Stampa conti della cena',`printContiCena(${y})`,'cena ' + y + ', un foglio A4']])}
-    <div class="filters">${num('persone','Partecipanti')}${num('nonPaganti','di cui non paganti')}${num('quota','Quota a persona €', 90)}</div>
+    <div class="filters">${persone('persone','Partecipanti')}${persone('nonPaganti','di cui non paganti')}${num('quota','Quota a persona €', 90)}</div>
     <div class="filters"><label class="chk">Costi €&nbsp;${campoSomma(c.costi, `setCena(${y},'costi',this.value)`)}</label></div>
     ${r ? `<table class="tbl" style="max-width:520px;margin-top:8px"><tbody>
       <tr><td>Ricavi: ${r.paganti} paganti per ${e(r.quota)}</td><td class="num">+ ${e(r.ricavi)}</td></tr>
@@ -3109,13 +3111,13 @@ function calcolaSomma(t){
   if(!/^[-+]?[\d.,]+([-+][\d.,]+)*$/.test(s)) return NaN;
   return Math.round(s.match(/[-+]?[\d.,]+/g).reduce((a,p)=>a + numeroIt(p), 0) * 100) / 100;
 }
-function campoSomma(val, onchange, largo){
-  const n = calcolaSomma(val);
-  return `<span class="somma"><input type="text" inputmode="decimal" autocomplete="off" value="${esc(val||'')}" placeholder="100+25+36"${largo ? ` style="width:${largo}px"` : ''} oninput="mostraSomma(this)" onchange="${onchange}"><button type="button" class="btn" title="Aggiungi il segno più" onmousedown="event.preventDefault()" onclick="piuSomma(this)">+</button><b class="esito">${esitoSomma(val)}</b></span>`;
+// persone = true: si contano persone, il totale si mostra senza euro
+function campoSomma(val, onchange, largo, persone){
+  return `<span class="somma"><input type="text" inputmode="${persone ? 'numeric' : 'decimal'}"${persone ? ' data-persone="1"' : ''} autocomplete="off" value="${esc(val||'')}" placeholder="${persone ? '10+5' : '100+25+36'}"${largo ? ` style="width:${largo}px"` : ''} oninput="mostraSomma(this)" onchange="${onchange}"><button type="button" class="btn" title="Aggiungi il segno più" onmousedown="event.preventDefault()" onclick="piuSomma(this)">+</button><b class="esito">${esitoSomma(val, persone)}</b></span>`;
 }
 // il totale a fianco compare solo quando c'è una somma da fare (es. 100+25)
-function esitoSomma(t){ t = String(t||'').trim(); if(!/\d\s*[-+]/.test(t)) return /^[\d.,\s]*$/.test(t) ? '' : 'da correggere'; const n = calcolaSomma(t); return isNaN(n) ? 'da correggere' : '= € ' + fmtDec2(n); }
-function mostraSomma(i){ i.parentNode.querySelector('.esito').textContent = esitoSomma(i.value); }
+function esitoSomma(t, persone){ t = String(t||'').trim(); if(!/\d\s*[-+]/.test(t)) return /^[\d.,\s]*$/.test(t) ? '' : 'da correggere'; const n = calcolaSomma(t); return isNaN(n) ? 'da correggere' : persone ? '= ' + n : '= € ' + fmtDec2(n); }
+function mostraSomma(i){ i.parentNode.querySelector('.esito').textContent = esitoSomma(i.value, !!i.dataset.persone); }
 function piuSomma(b){ const i = b.parentNode.querySelector('input'); if(i.value.trim() && !/[+]$/.test(i.value.trim())) i.value = i.value.trim() + '+'; i.focus(); mostraSomma(i); }
 function viewFineAnno(){
   const L = lotteria(), y = stagioneFinita(), estr = new Set(L.estratti), prese = cartellePrese(), nPrese = prese.length;

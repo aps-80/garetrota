@@ -2,7 +2,7 @@
 // Per pubblicare una nuova versione: aumenta il numero qui sotto (v1 -> v2 ...).
 // Ogni modifica a index.html deve aumentare VERSIONE, altrimenti i tablet tengono la versione vecchia.
 // La nuova versione non si attiva da sola: nella pagina compare "Nuova versione: Aggiorna".
-const VERSIONE = "garetrota-v18";
+const VERSIONE = "garetrota-v19";
 // librerie di Firebase (www.gstatic.com): cache separata, non si cancella a ogni versione
 const CACHE_FIREBASE = "firebase-sdk-10.14.1";
 

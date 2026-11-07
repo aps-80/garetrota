@@ -3778,8 +3778,8 @@ function fotoLeggiModulo(ar){
 }
 /* FOTO-PURO-FINE */
 /* ---- schermate: foto, invio, controllo e salvataggio. Fuori da qui, nel resto dell'app, ci sono solo i tre pulsanti. ---- */
-// FOTO_ATTIVA resta false finché contratti e informativa non sono approvati: i pulsanti non compaiono.
-const FOTO_ATTIVA = false;
+// FOTO_ATTIVA accesa il 07/11/2026: contratti, informativa e firme fatti (utente).
+const FOTO_ATTIVA = true;
 const FOTO_URL = 'https://garetrota-foto.djbighouse96.workers.dev'; // indirizzo del Worker (worker-foto)
 // solo per le prove sul PC, con dati inventati: http://localhost/?fotoprova=1
 const FOTO_PROVA = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /[?&]fotoprova=1/.test(location.search);

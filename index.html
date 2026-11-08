@@ -544,6 +544,9 @@ html.iphone .kv dd{overflow-wrap:anywhere}
 <script>
 'use strict';
 /* ================= DATI ================= */
+// versione del programma (maggiore.minore.correzione), si vede in Archivio e regolamento.
+// Deve essere uguale a VERSIONE in sw.js ("garetrota-" + questo numero).
+const VERSIONE_APP = '1.0.0';
 const LS_KEY = 'gareTrota.dati.v1';
 // tablet (schermo da toccare): in pesatura si apre la tastiera con i numeri
 const TABLET = matchMedia('(pointer:coarse)').matches;
@@ -3558,7 +3561,7 @@ function printBilancio(y){ printRaw(htmlBilancio(y)); }
 function viewArchivio(){
   const st = S.settings, sel = (k,v) => st[k]===v ? 'selected' : '';
   const euro = k => `<input type="number" min="0" step="0.5" value="${esc(st[k])}" onchange="setSetting('${k}',+this.value)">`;
-  return `<div class="toolbar"><h2>Archivio e regolamento</h2></div>
+  return `<div class="toolbar"><h2>Archivio e regolamento</h2><span class="muted small">Versione ${VERSIONE_APP}</span></div>
   <div class="grid2c"><div>
   <div class="card"><h3>Dove stanno i dati</h3><p class="muted small">I dati sono salvati in questo dispositivo, così il programma funziona anche senza internet. Quando c'è rete vanno anche su Firebase e arrivano sull'altro dispositivo (tablet o PC). La copia di sicurezza è in più: un file da tenere sul PC, se un giorno Firebase andasse rimesso da capo.</p></div>${boxConflitti()}
   <div class="card"><h3>Copia di sicurezza e ripristino</h3>

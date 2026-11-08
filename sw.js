@@ -1,8 +1,11 @@
 // Service worker di Gare Trota Web.
-// Per pubblicare una nuova versione: aumenta il numero qui sotto (v1 -> v2 ...).
+// Per pubblicare una nuova versione: aumenta il numero qui sotto (maggiore.minore.correzione):
+//   maggiore = aggiornamento importante, minore = aggiornamento piccolo, correzione = errore corretto.
 // Ogni modifica a index.html deve aumentare VERSIONE, altrimenti i tablet tengono la versione vecchia.
+// Lo stesso numero va in VERSIONE_APP dentro index.html.
 // La nuova versione non si attiva da sola: nella pagina compare "Nuova versione: Aggiorna".
-const VERSIONE = "garetrota-v19";
+// Prima della 1.0.0 (08/11/2026) le versioni erano v1 ... v19.
+const VERSIONE = "garetrota-1.0.0";
 // librerie di Firebase (www.gstatic.com): cache separata, non si cancella a ogni versione
 const CACHE_FIREBASE = "firebase-sdk-10.14.1";
 

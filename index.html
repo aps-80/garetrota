@@ -548,7 +548,7 @@ html.iphone .kv dd{overflow-wrap:anywhere}
 /* ================= DATI ================= */
 // versione del programma (maggiore.minore.correzione), si vede in Archivio e regolamento.
 // Deve essere uguale a VERSIONE in sw.js ("garetrota-" + questo numero).
-const VERSIONE_APP = '1.1.0';
+const VERSIONE_APP = '1.2.0';
 const LS_KEY = 'gareTrota.dati.v1';
 // tablet (schermo da toccare): in pesatura si apre la tastiera con i numeri
 const TABLET = matchMedia('(pointer:coarse)').matches;
@@ -1904,30 +1904,21 @@ function viewPesatura(){
   const oggi = g.data===today();
   return `<div class="fascia${oggi?'':' altra'}">Stai pesando: <b>${esc(g.nome)}</b> (${fmtDate(g.data)})<small>${oggi?'È la gara di oggi.':'ATTENZIONE: questa gara non è di oggi. Controlla che sia quella giusta.'}</small></div>
   <div class="toolbar"><button class="btn sm" onclick="go('pesatura')">Cambia gara</button>
-    <button class="btn sm" onclick="editLimite()">Limite trote: ${g.limiteTrote?'<b>'+g.limiteTrote+'</b>':'nessuno'}</button><span class="sp"></span>
+    <button class="btn sm" onclick="editLimite()">Limite trote: ${g.limiteTrote?'<b>'+g.limiteTrote+'</b>':'nessuno'}</button>
+    <button class="btn sm" onclick="editCostoPattuito(pes.garaId)" title="Il costo calcolato, oppure quello pattuito col proprietario del lago">Costo pattuito col lago: <span id="pesCosto"></span></button><span class="sp"></span>
     ${htmlStatoBorse(g)}</div>
   ${menuSezione([['va','vai','Apri la gara',"go('gara',pes.garaId)"],
     ['va','coppa','Classifica completa',"go('classifiche',{tipo:'gara',id:pes.garaId})"],
     ['st','stampa','Stampa inizio gara',"printPagamentiEGiudice(pes.garaId)",'','Copertina, foglio pagamenti e foglio giudice'],
     ['st','stampa','Foglio pagamenti',"printPagamenti(pes.garaId)"],
     ['st','stampa','Foglio giudice',"printFoglio(pes.garaId)"],
-    fotoDisponibile() && ['fa','foto','Leggi foglio da foto',"fotoScegli(pes.garaId)"],
-    ['fa','modifica','Costo trote',"editCostoPattuito(pes.garaId)",'<span id="pesCosto"></span>','Il costo calcolato, oppure quello pattuito col proprietario del lago']], true)}
+    ['st','stampa','Copia cassiere / lago',"printRiepilogo(pes.garaId)"],
+    fotoDisponibile() && ['fa','foto','Leggi foglio da foto',"fotoScegli(pes.garaId)"]], true)}
   <div class="pesgrid">
     <div class="card pad0"><div class="pesSearch"><input id="pesQ" type="search" placeholder="N. borsa o nome · Esc" autocomplete="off"${TABLET && !pes.lettere ? ' inputmode="numeric"' : ''}>${TABLET ? `<button type="button" class="btn sm" style="margin-right:6px" onclick="cambiaTastieraPes()" title="Tastiera con i numeri o con le lettere">${pes.lettere ? '123' : 'ABC'}</button>` : ''}<button class="btn sm" onclick="openIscrivi()" title="Aggiungi un partecipante">+ Iscrivi</button></div><div id="pesList" class="peslist"></div></div>
     <div class="card" id="pesForm"></div>
     <div class="card"><h3>Classifica in tempo reale</h3><div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:-2px 0 10px"><span id="pesProg" class="badge"></span></div><div id="pesClass"></div></div>
-  </div>
-  <div class="card" id="pesRiep"></div>`;
-}
-// riepilogo pescato e costo lago anche in pesatura, con la stampa per cassiere e lago (si aggiorna a ogni pesata)
-function renderPesRiep(g){
-  const box = $('#pesRiep'); if(!box) return;
-  if(!g.iscritti.some(e=>e.pesato)){ box.hidden = true; return; }
-  box.hidden = false;
-  box.innerHTML = `<div class="toolbar"><h3 style="margin:0 8px 4px 0">Riepilogo pescato e costo lago</h3></div>${htmlRiepilogo(g)}
-    <p style="margin:10px 0">Costo trote da pagare al lago: <b>€ ${fmtDec2(costoTrote(g))}</b>${g.costoPattuito!=null?' <span class="badge ok">pattuito</span>':''}</p>
-    ${menuSezione([['st','stampa','Copia cassiere / lago',`printRiepilogo('${g.id}')`]], true)}`;
+  </div>`;
 }
 function editLimite(){
   const g = gara(pes.garaId);
@@ -1973,8 +1964,7 @@ function renderPesList(){
   p.title = 'Mancano = partecipanti (hanno pagato o sono segnati "ha partecipato") non ancora pesati';
   // costo trote: calcolato man mano che si pesa, oppure quello pattuito col lago
   const c = $('#pesCosto');
-  if(c) c.textContent = g.costoPattuito!=null ? `pattuito € ${fmtDec2(g.costoPattuito)}` : `calcolato € ${fmtDec2(riepilogoGara(g).costo)} · tocca per il pattuito`;
-  renderPesRiep(g);
+  if(c) c.innerHTML = g.costoPattuito!=null ? `<b>€ ${fmtDec2(g.costoPattuito)}</b>` : `nessuno (calcolato € ${fmtDec2(riepilogoGara(g).costo)})`;
 }
 function selectPes(sid){ pes.sel = sid; renderPesList(); renderPesForm(); focusTrote(); }
 function focusTrote(){ const i = $('#inTrote'); if(i){ i.focus(); i.select(); } }
@@ -1992,7 +1982,7 @@ function renderPesForm(){
     <div class="pesname">${esc(entryName(e))}</div>
     ${e.pesato?'<div class="small">Già pesato: stai <b>correggendo</b> la pesata.</div>':''}
     <div class="pesinputs">
-      <label>Numero trote${g.limiteTrote?' (max '+g.limiteTrote+')':''}<input id="inTrote" type="number" min="0" step="1" inputmode="numeric" autocomplete="off" value="${e.pesato?e.trote:''}"></label>
+      <label>Numero trote${g.limiteTrote?' (max '+g.limiteTrote+')':''}<input id="inTrote" type="number" min="0" step="1" inputmode="numeric" autocomplete="off" value="${e.pesato ? e.trote : (+g.limiteTrote || '')}"></label>
       <label>Peso totale (${unit()})<input id="inPeso" inputmode="decimal" autocomplete="off" value="${e.pesato?pesoEdit(e.grammi):''}"></label>
     </div>
     <div class="btnrow"><button class="btn primary big" onclick="savePes()">Salva</button>

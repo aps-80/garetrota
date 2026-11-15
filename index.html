@@ -478,6 +478,8 @@ html.iphone .kv dd{overflow-wrap:anywhere}
   .pagamenti td{height:5.2mm}
   .pagamenti td.c{text-align:center}
   .pagamenti .cbx{display:inline-block;width:3.6mm;height:3.6mm;border:1px solid #000;line-height:3.6mm;font-size:9pt;text-align:center;vertical-align:middle}
+  /* pagato / ha partecipato: quadratino pieno nero, si vede meglio della spunta */
+  .pagamenti .cbx.si{background:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .pagamenti .qd{font-size:8pt}
   .pagamenti .nota{font-size:9pt;margin:3pt 0 0}
   .pagamenti table.ptot{margin-top:4pt;table-layout:fixed}
@@ -546,7 +548,7 @@ html.iphone .kv dd{overflow-wrap:anywhere}
 /* ================= DATI ================= */
 // versione del programma (maggiore.minore.correzione), si vede in Archivio e regolamento.
 // Deve essere uguale a VERSIONE in sw.js ("garetrota-" + questo numero).
-const VERSIONE_APP = '1.0.0';
+const VERSIONE_APP = '1.1.0';
 const LS_KEY = 'gareTrota.dati.v1';
 // tablet (schermo da toccare): in pesatura si apre la tastiera con i numeri
 const TABLET = matchMedia('(pointer:coarse)').matches;
@@ -1591,7 +1593,8 @@ function valoreTrota(g){
 function oltreLimite(g, e){ return !!(+g.limiteTrote) && e.trote > +g.limiteTrote; }
 function puntiGara(e, g){
   if(oltreLimite(g, e)) return 0;
-  return Math.round((e.trote * valoreTrota(g) + e.grammi * tariffe(g).puntiGrammo) * 100) / 100;
+  // punti interi, arrotondati all'unità (dalla 1.1.0, anche per le gare già fatte)
+  return Math.round(e.trote * valoreTrota(g) + e.grammi * tariffe(g).puntiGrammo);
 }
 function sortKeys(){
   const st = S.settings;
@@ -1759,7 +1762,7 @@ function htmlPagamenti(g, conti){
     <tr><th colspan="2">CONCORRENTI</th><th colspan="2">SOCI PAGATI</th><th>RICAVI GARA</th><th>RICAVI SOCI</th><th>TOTALE</th></tr>
     <tr><td colspan="2">${c.persone}${c.pagPers < c.persone ? `<small>hanno pagato in ${c.pagPers}</small>` : ''}</td><td colspan="2">${c.iscrizioni}</td><td rowspan="2">${eur(c.qGara)}</td><td rowspan="2">${eur(c.qSoci)}</td><td rowspan="2">${eur(c.qGara + c.qSoci)}</td></tr>
     <tr>${pa(pConc, conc.length - pConc)}${pa(c.pSoci.pierini.n, c.pSoci.adulti.n)}</tr></table>`;
-  const casella = v => `<span class="cbx">${v?'✓':''}</span>`;
+  const casella = v => `<span class="cbx${v?' si':''}"></span>`;
   const quota = e => { const d = dovuto(g,e); return fmtDec2(d.tot) + (d.soci ? ` <span class="qd">(gara ${fmtNum(d.gara)} + socio ${fmtNum(d.soci)})</span>` : ''); };
   const quoteGara = t.quotaGaraAdulto===t.quotaGaraPierino ? `quota gara € ${fmtNum(t.quotaGaraAdulto)}` : `quota gara adulti € ${fmtNum(t.quotaGaraAdulto)}, pierini € ${fmtNum(t.quotaGaraPierino)}`;
   return `<div class="giudice pagamenti"><div class="gtit">${esc(titoloFoglio(g))}${isCoppie(g)?'  - GARA A COPPIE':''}</div><table><thead><tr><th style="width:16mm">BORSA</th><th>COGNOME NOME</th><th style="width:48mm">QUOTA €</th><th style="width:22mm">PAGATO</th><th style="width:26mm">HA<br>PARTECIPATO</th></tr></thead><tbody>
@@ -1821,7 +1824,7 @@ function descrizioneRegolamento(g){
   let p = '';
   if(g){
     const vt = valoreTrota(g), t = tariffe(g);
-    p = ` Punti per la classifica generale = trote × ${fmtNum(vt)} + grammi${+t.puntiGrammo!==1?' × '+fmtNum(t.puntiGrammo):''}`
+    p = ` Punti per la classifica generale = trote × ${fmtNum(vt)} + grammi${+t.puntiGrammo!==1?' × '+fmtNum(t.puntiGrammo):''}, arrotondati all'unità`
       + (vt !== +t.puntiTrota ? ` (limite gara ${g.limiteTrote} trote invece di ${limiteStagione(annoGara(g))}: ogni trota vale ${fmtNum(t.puntiTrota)} × ${limiteStagione(annoGara(g))} / ${g.limiteTrote})` : '')
       + (+g.limiteTrote ? `. Chi supera il limite di ${g.limiteTrote} trote prende 0 punti e la gara conta come non disputata.` : '.');
   }
@@ -1914,7 +1917,17 @@ function viewPesatura(){
     <div class="card pad0"><div class="pesSearch"><input id="pesQ" type="search" placeholder="N. borsa o nome · Esc" autocomplete="off"${TABLET && !pes.lettere ? ' inputmode="numeric"' : ''}>${TABLET ? `<button type="button" class="btn sm" style="margin-right:6px" onclick="cambiaTastieraPes()" title="Tastiera con i numeri o con le lettere">${pes.lettere ? '123' : 'ABC'}</button>` : ''}<button class="btn sm" onclick="openIscrivi()" title="Aggiungi un partecipante">+ Iscrivi</button></div><div id="pesList" class="peslist"></div></div>
     <div class="card" id="pesForm"></div>
     <div class="card"><h3>Classifica in tempo reale</h3><div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:-2px 0 10px"><span id="pesProg" class="badge"></span></div><div id="pesClass"></div></div>
-  </div>`;
+  </div>
+  <div class="card" id="pesRiep"></div>`;
+}
+// riepilogo pescato e costo lago anche in pesatura, con la stampa per cassiere e lago (si aggiorna a ogni pesata)
+function renderPesRiep(g){
+  const box = $('#pesRiep'); if(!box) return;
+  if(!g.iscritti.some(e=>e.pesato)){ box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = `<div class="toolbar"><h3 style="margin:0 8px 4px 0">Riepilogo pescato e costo lago</h3></div>${htmlRiepilogo(g)}
+    <p style="margin:10px 0">Costo trote da pagare al lago: <b>€ ${fmtDec2(costoTrote(g))}</b>${g.costoPattuito!=null?' <span class="badge ok">pattuito</span>':''}</p>
+    ${menuSezione([['st','stampa','Copia cassiere / lago',`printRiepilogo('${g.id}')`]], true)}`;
 }
 function editLimite(){
   const g = gara(pes.garaId);
@@ -1961,6 +1974,7 @@ function renderPesList(){
   // costo trote: calcolato man mano che si pesa, oppure quello pattuito col lago
   const c = $('#pesCosto');
   if(c) c.textContent = g.costoPattuito!=null ? `pattuito € ${fmtDec2(g.costoPattuito)}` : `calcolato € ${fmtDec2(riepilogoGara(g).costo)} · tocca per il pattuito`;
+  renderPesRiep(g);
 }
 function selectPes(sid){ pes.sel = sid; renderPesList(); renderPesForm(); focusTrote(); }
 function focusTrote(){ const i = $('#inTrote'); if(i){ i.focus(); i.select(); } }

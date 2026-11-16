@@ -551,7 +551,7 @@ html.iphone .kv dd{overflow-wrap:anywhere}
 /* ================= DATI ================= */
 // versione del programma (maggiore.minore.correzione), si vede in Archivio e regolamento.
 // Deve essere uguale a VERSIONE in sw.js ("garetrota-" + questo numero).
-const VERSIONE_APP = '1.3.0';
+const VERSIONE_APP = '1.3.1';
 const LS_KEY = 'gareTrota.dati.v1';
 // tablet (schermo da toccare): in pesatura si apre la tastiera con i numeri
 const TABLET = matchMedia('(pointer:coarse)').matches;
@@ -3115,18 +3115,24 @@ function totaliCena(y){
 }
 function boxTabellaCena(y){
   const I = iscrittiCena(y), cas = (s, k, v) => `<input type="text" inputmode="numeric" class="ncena" autocomplete="off" value="${v}" onchange="setCenaSocio(${y},'${s.id}','${k}',this)" onkeydown="invioCena(event,this)">`;
+  const c = cenaConti(y), quotaLett = +cenaDati().quota || 0;
+  // ordine: pulsanti, quota e costi, lista dei soci, totali e conti
   return `<div class="card"><div class="toolbar"><h3 style="margin:0 8px 0 0">Cena di fine anno</h3>
       <select onchange="cen.anno=+this.value;render()">${anni().map(a=>`<option ${a===y?'selected':''}>${a}</option>`).join('')}</select>
       <span class="muted small">&nbsp;cena del ${fmtDate(dataCena(y))}</span></div>
     ${menuSezione([['st','stampa','Foglio della cena',`printFoglioCena(${y})`,'A4, anche da scrivere a penna'],
+      ['st','stampa','Stampa conti della cena',`printContiCena(${y})`,'un foglio A4'],
       ['va','palline','BINGOTROT',"go('bingo')",'lotteria della sera']])}
+    <div class="filters"><label class="chk">Quota a persona €&nbsp;<input type="text" inputmode="numeric" style="width:90px" value="${esc(c.quota!=null && c.quota!=='' ? fmtDec2(c.quota).replace(/\./g,'') : '')}" placeholder="${fmtDec2(quotaLett)}" onchange="setCena(${y},'quota',this.value)"></label>
+      <label class="chk">Costi €&nbsp;${campoSomma(c.costi, `setCena(${y},'costi',this.value)`)}</label></div>
     <div class="tblwrap"><table class="tbl cenatab"><thead><tr><th>Cognome</th><th>Nome</th><th class="ctr">NR</th><th class="ctr">Paganti</th></tr></thead><tbody>
     ${sociCena(y).map(s=>{ const v = I[s.id], si = v && +v.nr > 0;
       return `<tr data-cena="${s.id}" class="${si?'si':''}"><td><b>${esc(s.cognome)}</b>${s.eliminato?' <span class="muted small">(eliminato)</span>':''}</td><td>${esc(s.nome)}</td>
         <td class="ctr">${cas(s, 'nr', si ? v.nr : '')}</td><td class="ctr">${cas(s, 'pag', si ? Math.min(+v.pag || 0, +v.nr) : '')}</td></tr>`; }).join('')}
     </tbody></table></div>
     ${totaliCena(y)}
-    <p class="help"><b>NR</b> = persone che porta il socio, lui compreso. <b>Paganti</b> parte uguale a NR: abbassalo se qualcuno non paga. Partecipa chi ha NR maggiore di zero; Invio passa al socio sotto. La quota a persona si cambia nei conti della cena.</p></div>`;
+    ${boxCena()}
+    <p class="help"><b>NR</b> = persone che porta il socio, lui compreso. <b>Paganti</b> parte uguale a NR: abbassalo se qualcuno non paga. Partecipa chi ha NR maggiore di zero; Invio passa al socio sotto. Nei costi scrivi le spese una dopo l'altra col segno +, per esempio 100+25+36+45 (il pulsante + serve se la tastiera del tablet non ha il più). I conti della cena entrano nel bilancio della stagione in Amministrazione.${c.quota==null || c.quota==='' ? ` La quota, se non la scrivi, è quella della lettera d'invito (€ ${fmtDec2(quotaLett)}).` : ''}</p></div>`;
 }
 // titolo del foglio: il luogo della lettera d'invito (senza grassetti, fino alla prima virgola)
 function luogoCena(){
@@ -3164,23 +3170,13 @@ function setCena(y, k, val){
   if(s==='') delete c[k]; else c[k] = v;
   save(); render();
 }
+// conti della cena (ricavi, costi, risultato) sotto i totali della tabella; si aggiorna dopo ogni casella (aggiornaCena)
 function boxCena(){
-  const y = cen.anno || stagioneFinita(), c = cenaConti(y), r = contiCena(y), t = tabellaCena(y), e = n => '€ ' + fmtDec2(n);
-  const quotaLett = +cenaDati().quota || 0;
-  const num = (k, t, w) => `<label class="chk">${t}&nbsp;<input type="text" inputmode="numeric" style="width:${w||80}px" value="${esc(c[k]!=null ? (k==='quota' ? fmtDec2(c[k]).replace(/\./g,'') : c[k]) : '')}"${k==='quota' ? ` placeholder="${fmtDec2(quotaLett)}"` : ''} onchange="setCena(${y},'${k}',this.value)"></label>`;
-  // partecipanti e non paganti: col pulsante + (il tastierino numerico del tablet non ha il più), il totale si vede a fianco
-  const persone = (k, t) => `<label class="chk">${t}&nbsp;${campoSomma(c[k]!=null ? String(c[k]) : '', `setCena(${y},'${k}',this.value)`, 80, true)}</label>`;
-  return `<div class="card" id="boxCena"><div class="toolbar"><h3 style="margin:0 8px 0 0">Conti della cena ${y}</h3></div>
-    ${menuSezione([['st','stampa','Stampa conti della cena',`printContiCena(${y})`,'cena ' + y + ', un foglio A4']])}
-    <div class="filters">${t ? `<span class="chk">Partecipanti&nbsp;<b>${t.nr}</b></span><span class="chk">di cui non paganti&nbsp;<b>${t.nr - t.pag}</b></span>`
-      : persone('persone','Partecipanti') + persone('nonPaganti','di cui non paganti')}${num('quota','Quota a persona €', 90)}</div>
-    ${t ? '<p class="help" style="margin-top:0">Partecipanti e non paganti vengono dalla tabella della cena qui sopra.</p>' : ''}
-    <div class="filters"><label class="chk">Costi €&nbsp;${campoSomma(c.costi, `setCena(${y},'costi',this.value)`)}</label></div>
-    ${r ? `<table class="tbl" style="max-width:520px;margin-top:8px"><tbody>
+  const y = cen.anno || stagioneFinita(), r = contiCena(y), e = n => '€ ' + fmtDec2(n);
+  return `<div id="boxCena">${r ? `<table class="tbl" style="max-width:520px;margin-top:8px"><tbody>
       <tr><td>Ricavi: ${r.paganti} paganti per ${e(r.quota)}</td><td class="num">+ ${e(r.ricavi)}</td></tr>
       <tr><td>Costi</td><td class="num">- ${e(r.costi)}</td></tr>
-      <tr class="tot" style="font-weight:700"><td>Risultato della cena</td><td class="num"${r.risultato<0?' style="color:#a8231b"':''}>${e(r.risultato)}</td></tr></tbody></table>` : ''}
-    <p class="help">Nella casella dei costi scrivi le spese una dopo l'altra col segno +, per esempio 100+25+36+45: il totale compare subito a fianco. Il pulsante + serve se la tastiera del tablet non ha il segno più. I conti della cena entrano nel bilancio della stagione in Amministrazione.${c.quota==null || c.quota==='' ? ` La quota, se non la scrivi, è quella della lettera d'invito (${e(quotaLett)}).` : ''}</p></div>`;
+      <tr class="tot" style="font-weight:700"><td>Risultato della cena</td><td class="num"${r.risultato<0?' style="color:#a8231b"':''}>${e(r.risultato)}</td></tr></tbody></table>` : ''}</div>`;
 }
 // foglio dei conti della cena: stesso aspetto della pagina dei conti della gara (numeri a sinistra, euro a destra)
 function htmlContiCena(y){
@@ -3231,15 +3227,14 @@ function piuSomma(b){ const i = b.parentNode.querySelector('input'); if(i.value.
 function viewFineAnno(){
   const y = stagioneFinita();
   return `<div class="toolbar"><h2>Fine anno</h2></div>
-  ${boxTabellaCena(cen.anno || y)}
-  ${boxCena()}
   <div class="card"><h3>Cena sociale e auguri</h3><p class="help" style="margin-bottom:10px">Novembre: lettera d'invito alla cena che chiude la stagione ${y} (premiazione e BINGOTROT). Dicembre: lettera di auguri con il calendario gare ${y+1}.</p>
     ${menuSezione([['st','lettera','Lettera invito cena',"openCena()",'due modelli tra cui scegliere'],
       ['va','coppa',`Classifica generale ${y}`,`go('classifiche',{tipo:'gen',anno:${y}})`,'per la premiazione'],
       ['st','stampa','Stampa i primi 10',`printRaw(htmlTop10(${y}))`,'stagione '+y],
       ['st','lettera','Lettera di auguri',"openAuguri()",'con il calendario '+(y+1)],
       ['st','lettera','Lettera ai fornitori',"openLetteraNatale('fornitori')",'auguri di Natale e grazie'],
-      ['st','lettera','Lettera a chi ci ospita',"openLetteraNatale('ospitanti')","grazie per l'ospitalità"]])}</div>`;
+      ['st','lettera','Lettera a chi ci ospita',"openLetteraNatale('ospitanti')","grazie per l'ospitalità"]])}</div>
+  ${boxTabellaCena(cen.anno || y)}`;
 }
 // pagina della lotteria BINGOTROT (dal pulsante arancio in Fine anno)
 function viewBingo(){

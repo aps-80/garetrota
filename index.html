@@ -551,7 +551,7 @@ html.iphone .kv dd{overflow-wrap:anywhere}
 /* ================= DATI ================= */
 // versione del programma (maggiore.minore.correzione), si vede in Archivio e regolamento.
 // Deve essere uguale a VERSIONE in sw.js ("garetrota-" + questo numero).
-const VERSIONE_APP = '1.3.1';
+const VERSIONE_APP = '1.3.2';
 const LS_KEY = 'gareTrota.dati.v1';
 // tablet (schermo da toccare): in pesatura si apre la tastiera con i numeri
 const TABLET = matchMedia('(pointer:coarse)').matches;
@@ -3119,7 +3119,7 @@ function boxTabellaCena(y){
   // ordine: pulsanti, quota e costi, lista dei soci, totali e conti
   return `<div class="card"><div class="toolbar"><h3 style="margin:0 8px 0 0">Cena di fine anno</h3>
       <select onchange="cen.anno=+this.value;render()">${anni().map(a=>`<option ${a===y?'selected':''}>${a}</option>`).join('')}</select>
-      <span class="muted small">&nbsp;cena del ${fmtDate(dataCena(y))}</span></div>
+      <span class="muted small">&nbsp;cena del ${fmtDate(dataCena(y))}${luogoCena() ? ' · ' + esc(luogoCena()) : ''} (si cambiano in "Lettera invito cena")</span></div>
     ${menuSezione([['st','stampa','Foglio della cena',`printFoglioCena(${y})`,'A4, anche da scrivere a penna'],
       ['st','stampa','Stampa conti della cena',`printContiCena(${y})`,'un foglio A4'],
       ['va','palline','BINGOTROT',"go('bingo')",'lotteria della sera']])}
@@ -3136,8 +3136,9 @@ function boxTabellaCena(y){
 }
 // titolo del foglio: il luogo della lettera d'invito (senza grassetti, fino alla prima virgola)
 function luogoCena(){
-  const d = cenaDati();
-  const l = String(d.luogo || '').trim() || String(d.sede || '').split('\n').map(x=>x.trim()).filter(Boolean)[0] || '';
+  // segue il modello scelto nella lettera: modello 2 (Roverbasso) usa "Dove", modello 1 il "Luogo"
+  const d = cenaDati(), primaSede = String(d.sede || '').split('\n').map(x=>x.trim()).filter(Boolean)[0] || '', luogo = String(d.luogo || '').trim();
+  const l = +d.layout === 2 ? (primaSede || luogo) : (luogo || primaSede);
   return l.replace(/\*\*|__|\*/g, '').split(',')[0].trim();
 }
 // foglio della cena: una pagina, righe più basse se i soci sono tanti; la seconda colonna NR è vuota, per la penna

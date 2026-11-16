@@ -5,7 +5,7 @@
 // Lo stesso numero va in VERSIONE_APP dentro index.html.
 // La nuova versione non si attiva da sola: nella pagina compare "Nuova versione: Aggiorna".
 // Prima della 1.0.0 (08/11/2026) le versioni erano v1 ... v19.
-const VERSIONE = "garetrota-1.2.0";
+const VERSIONE = "garetrota-1.3.0";
 // librerie di Firebase (www.gstatic.com): cache separata, non si cancella a ogni versione
 const CACHE_FIREBASE = "firebase-sdk-10.14.1";
 

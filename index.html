@@ -293,6 +293,14 @@ html.iphone .kv dd{overflow-wrap:anywhere}
   .copertina .ct3{font-size:20pt;font-style:normal;font-family:Georgia,"Times New Roman",serif;margin:0 10mm}
   .copertina .ct4{font-size:16pt;font-style:normal;font-family:Georgia,"Times New Roman",serif;margin-top:2mm}
   .copertina .clogo{width:115mm;margin-top:10mm}
+  /* buste 110 x 231 mm: una per pagina, misure fisse dal bordo della busta */
+  .busta{position:relative;width:231mm;height:110mm;overflow:hidden;page-break-after:always;font-family:Arial,Helvetica,sans-serif;color:#000}
+  .busta:last-child{page-break-after:auto}
+  .busta .bmitt{position:absolute;left:10mm;top:9mm;width:95mm;display:flex;gap:3mm;align-items:flex-start;font-size:9pt;line-height:1.3}
+  .busta .bmitt img{width:16mm;flex:none}
+  .busta .bmitt .b1{font-weight:700;font-size:10pt}
+  .busta .bdest{position:absolute;left:118mm;top:55mm;width:103mm;font-size:12pt;line-height:1.4}
+  .busta .bdest .b1{font-weight:700}
   /* biglietti turni: A4 orizzontale = 4 strisce 74×210, ogni striscia 3 biglietti da 70 mm */
   .pagA4{width:297mm;height:209mm;display:flex;page-break-after:always;overflow:hidden}
   .pagstr{width:72mm;height:209mm;page-break-after:always;overflow:hidden}
@@ -551,7 +559,7 @@ html.iphone .kv dd{overflow-wrap:anywhere}
 /* ================= DATI ================= */
 // versione del programma (maggiore.minore.correzione), si vede in Archivio e regolamento.
 // Deve essere uguale a VERSIONE in sw.js ("garetrota-" + questo numero).
-const VERSIONE_APP = '1.3.2';
+const VERSIONE_APP = '1.4.0';
 const LS_KEY = 'gareTrota.dati.v1';
 // tablet (schermo da toccare): in pesatura si apre la tastiera con i numeri
 const TABLET = matchMedia('(pointer:coarse)').matches;
@@ -1790,6 +1798,46 @@ function htmlCopertina(g){
     <div class="ct3">${esc(g.nome)}</div>${g.orario?`<div class="ct4">ore ${esc(g.orario)}</div>`:''}<img class="clogo" src="${logoSocieta()}" alt="Logo"></div>`;
 }
 function printCopertina(gid){ printRaw(htmlCopertina(gara(gid))); }
+// copertina della cena sociale, uguale a quella delle gare: giorno, luogo e ora dalla lettera d'invito
+function htmlCopertinaCena(y){
+  const d = cenaDati(), luogo = luogoCena();
+  return `<div class="copertina"><div class="ct1">CENA SOCIALE</div><div class="ct2">${esc(titoloSoc())}</div>
+    <div class="ct3">Cena - ${esc(giornoMaiusc(dataCena(y), true))}${luogo ? ' - ' + esc(luogo) : ''}</div>${d.ora?`<div class="ct4">ore ${esc(d.ora)}</div>`:''}<img class="clogo" src="${logoSocieta()}" alt="Logo"></div>`;
+}
+
+/* ---- buste dei soci (110 x 231 mm): mittente in alto a sinistra con lo stemma, destinatario in basso a destra ---- */
+// in alto a destra resta libero il posto del francobollo; sotto il destinatario restano 15 mm liberi per i codici delle Poste
+function busteMittente(){
+  const st = S.settings;
+  if(st.busteMittente) return st.busteMittente;
+  return [titoloSoc()].concat(String(st.moduloSede !== undefined ? st.moduloSede : MODULO_SEDE).split('\n')).map(x=>x.trim()).filter(Boolean).join('\n');
+}
+const indirizzoPostale = s => !!(String(s.indirizzo||'').trim() && String(s.cap||'').trim() && String(s.citta||'').trim());
+function htmlBusta(s, mitt, logo){
+  const U = v => esc(String(v||'').trim().toUpperCase());
+  const righe = mitt.split('\n').map(x=>x.trim()).filter(Boolean);
+  return `<div class="busta">
+    <div class="bmitt">${logo ? `<img src="${logoUrl()}" alt="">` : ''}<div>${righe.map((r,i)=>`<div${i?'':' class="b1"'}>${markup(esc(r))}</div>`).join('')}</div></div>
+    <div class="bdest"><div class="b1">${U(s.nome)} ${U(s.cognome)}</div><div>${U(s.indirizzo)}</div>
+      <div>${U(s.cap)} ${U(s.citta)}${s.provincia ? ' (' + U(s.provincia) + ')' : ''}</div></div></div>`;
+}
+function openBuste(){
+  const st = S.settings, soci = sociAttivi(), ok = soci.filter(indirizzoPostale), senza = soci.filter(s=>!indirizzoPostale(s));
+  const esclusi = st.busteEsclusi || [];
+  openDlg('Buste per i soci (110 x 231 mm)', `<label>Mittente (in alto a sinistra)<textarea name="mitt" style="min-height:70px" placeholder="A.P.S. 80&#10;Via ...&#10;CAP Città (PR)">${esc(busteMittente())}</textarea></label>
+    <label class="chk" style="margin-top:6px"><input type="checkbox" name="logo" ${st.busteLogo === false ? '' : 'checked'}>&nbsp;Stemma accanto al mittente</label>
+    <p style="margin:12px 0 4px"><b>A chi</b> (${ok.length} soci con l'indirizzo) &nbsp;<a href="#" onclick="document.querySelectorAll('#dlgForm .fsel').forEach(c=>c.checked=true);return false">tutti</a> · <a href="#" onclick="document.querySelectorAll('#dlgForm .fsel').forEach(c=>c.checked=false);return false">nessuno</a></p>
+    <div class="addlist" style="max-height:220px">${ok.map(s=>`<label class="chk" style="display:flex"><input type="checkbox" class="fsel" value="${s.id}" ${esclusi.indexOf(s.id)<0?'checked':''}>&nbsp;${esc(nome(s))} <span class="muted small">&nbsp;${esc(s.citta)}</span></label>`).join('')}</div>
+    ${senza.length ? `<p class="alert warn"><b>Senza indirizzo completo</b> (non escono): ${senza.map(s=>esc(nome(s))).join(', ')}. Si completano in Soci.</p>` : ''}
+    <p class="help">Una busta per ogni socio spuntato. Nella finestra di stampa scegli il formato della busta (110 x 231 mm o "personalizzato") e mettila come chiede la stampante. Prima prova con un nome solo. **testo** nel mittente = grassetto.</p>`, f=>{
+      const scelti = [...document.querySelectorAll('#dlgForm .fsel:checked')].map(x=>x.value);
+      if(!scelti.length){ alert('Spunta almeno un socio.'); return false; }
+      const mitt = String(f.mitt||'').trim();
+      st.busteMittente = mitt; st.busteLogo = !!f.logo; st.busteEsclusi = ok.filter(s=>scelti.indexOf(s.id)<0).map(s=>s.id);
+      save(); closeDlg();
+      printRaw(`<style>@page{size:231mm 110mm;margin:0}</style><div class="buste">${ok.filter(s=>scelti.indexOf(s.id)>=0).map(s=>htmlBusta(s, mitt, !!f.logo)).join('')}</div>`);
+  }, '', 'Stampa le buste');
+}
 const SALTO_PAGINA = '<div style="page-break-before:always"></div>';
 function printPagamentiEGiudice(gid){ const g = gara(gid); printRaw(htmlCopertina(g) + SALTO_PAGINA + htmlPagamenti(g) + SALTO_PAGINA + htmlGiudice(g)); }
 function garePerStagione(y){ return S.gare.filter(g=>g.valeGenerale!==false && g.data.indexOf(String(y))===0 && g.iscritti.some(e=>e.pesato && !e.assente)).sort((a,b)=>a.data.localeCompare(b.data)); }
@@ -3121,6 +3169,7 @@ function boxTabellaCena(y){
       <select onchange="cen.anno=+this.value;render()">${anni().map(a=>`<option ${a===y?'selected':''}>${a}</option>`).join('')}</select>
       <span class="muted small">&nbsp;cena del ${fmtDate(dataCena(y))}${luogoCena() ? ' · ' + esc(luogoCena()) : ''} (si cambiano in "Lettera invito cena")</span></div>
     ${menuSezione([['st','stampa','Foglio della cena',`printFoglioCena(${y})`,'A4, anche da scrivere a penna'],
+      ['st','stampa','Copertina della cena',`printRaw(htmlCopertinaCena(${y}))`,'giorno, luogo e ora'],
       ['st','stampa','Stampa conti della cena',`printContiCena(${y})`,'un foglio A4'],
       ['va','palline','BINGOTROT',"go('bingo')",'lotteria della sera']])}
     <div class="filters"><label class="chk">Quota a persona €&nbsp;<input type="text" inputmode="numeric" style="width:90px" value="${esc(c.quota!=null && c.quota!=='' ? fmtDec2(c.quota).replace(/\./g,'') : '')}" placeholder="${fmtDec2(quotaLett)}" onchange="setCena(${y},'quota',this.value)"></label>
@@ -3230,6 +3279,7 @@ function viewFineAnno(){
   return `<div class="toolbar"><h2>Fine anno</h2></div>
   <div class="card"><h3>Cena sociale e auguri</h3><p class="help" style="margin-bottom:10px">Novembre: lettera d'invito alla cena che chiude la stagione ${y} (premiazione e BINGOTROT). Dicembre: lettera di auguri con il calendario gare ${y+1}.</p>
     ${menuSezione([['st','lettera','Lettera invito cena',"openCena()",'due modelli tra cui scegliere'],
+      ['st','lettera','Buste per i soci',"openBuste()",'110 x 231 mm, da spedire'],
       ['va','coppa',`Classifica generale ${y}`,`go('classifiche',{tipo:'gen',anno:${y}})`,'per la premiazione'],
       ['st','stampa','Stampa i primi 10',`printRaw(htmlTop10(${y}))`,'stagione '+y],
       ['st','lettera','Lettera di auguri',"openAuguri()",'con il calendario '+(y+1)],
@@ -3496,7 +3546,8 @@ function viewStampe(){
     <div class="card"><h3>Soci</h3>
       ${menuSezione([['st','stampa','Rubrica soci',"printSoci()"],
         ['st','stampa','Modulo privacy',"openModuloIscrizione()",'da far firmare'],
-        ['st','stampa','Tessere soci',"openTessere()",'10 per foglio']])}</div>
+        ['st','stampa','Tessere soci',"openTessere()",'10 per foglio'],
+        ['st','lettera','Buste soci',"openBuste()",'110 x 231 mm']])}</div>
   </div>
   <div class="grid2c">
     <div class="card"><h3>Nuova stagione</h3>

@@ -112,7 +112,10 @@ label.chk>select{width:auto;margin:0}
 .tbl tr.prem td{background:#e6f0fb}
 .tbl tr.inactive td{color:var(--muted)}
 .tbl tr.hl td{background:#d4f0e4 !important}
-.tbl.cenatab{max-width:620px}
+.tbl.cenatab{max-width:980px}
+.tbl.cenatab input.ncena.dato{width:84px}
+.tbl.cenatab td.esitocena{font-size:13px}
+.tbl.cenatab td.esitocena .btn{margin:2px 0 2px 6px}
 .tbl.cenatab tr.si td{background:#e6f4ee}
 .tbl.cenatab input.ncena{width:64px;text-align:center;font-weight:700;padding:5px 4px}
 .tbl tr.dim td{color:var(--muted);font-style:italic}
@@ -559,7 +562,7 @@ html.iphone .kv dd{overflow-wrap:anywhere}
 /* ================= DATI ================= */
 // versione del programma (maggiore.minore.correzione), si vede in Archivio e regolamento.
 // Deve essere uguale a VERSIONE in sw.js ("garetrota-" + questo numero).
-const VERSIONE_APP = '1.4.0';
+const VERSIONE_APP = '1.5.0';
 const LS_KEY = 'gareTrota.dati.v1';
 // tablet (schermo da toccare): in pesatura si apre la tastiera con i numeri
 const TABLET = matchMedia('(pointer:coarse)').matches;
@@ -3108,8 +3111,42 @@ function contiCena(y){
   const persone = t ? t.nr : +c.persone || 0, nonPaganti = t ? t.nr - t.pag : Math.min(+c.nonPaganti || 0, persone);
   const quota = quotaCena(y), costi = calcolaSomma(c.costi) || 0;
   if(!persone && !costi) return null;
-  const paganti = persone - nonPaganti, ricavi = Math.round(paganti * quota * 100) / 100;
-  return {data:dataCena(y), persone, nonPaganti, paganti, quota, ricavi, costi, risultato:ricavi - costi, tabella:!!t};
+  const paganti = persone - nonPaganti, ricavi = Math.round(paganti * quota * 100) / 100, offerte = t ? t.off : 0;
+  return {data:dataCena(y), persone, nonPaganti, paganti, quota, ricavi, offerte, costi, risultato:Math.round((ricavi + offerte - costi) * 100) / 100, tabella:!!t};
+}
+/* pagamento di un socio alla cena: dato = soldi che ha dato, off = parte del resto lasciata in offerta alla società.
+   dovuto = paganti per quota; resto = dato - dovuto - offerta (l'offerta non supera mai quello che avanza) */
+function pagaCena(v, q){
+  const dovuto = Math.round((+v.pag || 0) * q * 100) / 100, dato = v.dato!=null && v.dato!=='' ? +v.dato : null;
+  if(dato==null) return {dovuto, dato:null, manca:0, off:0, resto:0};
+  const avanza = Math.max(0, Math.round((dato - dovuto) * 100) / 100), off = Math.min(+v.off || 0, avanza);
+  return {dovuto, dato, manca:Math.max(0, Math.round((dovuto - dato) * 100) / 100), off, resto:Math.round((avanza - off) * 100) / 100};
+}
+// cella a fianco di "Dato": manca, pagato, resto e offerta, con i pulsanti per l'offerta
+function esitoCena(y, id){
+  const v = iscrittiCena(y)[id];
+  if(!v || !(+v.nr > 0)) return '';
+  const p = pagaCena(v, quotaCena(y)), e = n => '€ ' + fmtDec2(n);
+  if(p.dato==null) return `<span class="muted small">deve ${e(p.dovuto)}</span>`;
+  if(p.manca) return `<b style="color:#a8231b">manca ${e(p.manca)}</b>`;
+  const avanza = p.off + p.resto;
+  if(!avanza) return '<span class="muted">pagato</span>';
+  return `${p.resto ? `<b>resto ${e(p.resto)}</b>` : '<span class="muted">nessun resto</span>'}${p.off ? ` · <b style="color:#1b7a4b">offerta ${e(p.off)}</b>` : ''}
+    <span class="noprint">${p.resto ? `<button type="button" class="btn sm" onclick="offertaCena(${y},'${id}','tutto')">Resto in offerta</button>` : ''}<button type="button" class="btn sm" onclick="offertaCena(${y},'${id}')">${p.off ? 'Cambia offerta' : 'Offerta libera'}</button></span>`;
+}
+function offertaCena(y, id, tutto){
+  const I = iscrittiCena(y), v = I[id]; if(!v) return;
+  const p = pagaCena(v, quotaCena(y)), avanza = Math.round((p.off + p.resto) * 100) / 100;
+  let off = avanza;
+  if(!tutto){
+    const s = prompt(`Avanzano € ${fmtDec2(avanza)}. Quanto lascia in offerta alla società? (0 = niente, gli ridai tutto il resto)`, p.off ? fmtDec2(p.off) : '');
+    if(s==null) return;
+    off = String(s).trim()==='' ? 0 : calcolaSomma(s);
+    if(isNaN(off) || off < 0){ alert('Scrivi una cifra, per esempio 10.'); return; }
+    if(off > avanza){ alert(`L'offerta è al massimo € ${fmtDec2(avanza)}, quello che avanza.`); return; }
+  }
+  if(off) v.off = off; else delete v.off;
+  save(); aggiornaCena(y, id);
 }
 /* tabella della cena di fine anno: S.settings.cenaConti[anno].iscritti[socioId] = {nr, pag}
    nr = persone che porta il socio (lui compreso), pag = quante di loro pagano. Partecipa chi ha nr > 0 */
@@ -3118,30 +3155,43 @@ function tabellaCena(y){
   const I = iscrittiCena(y), ids = Object.keys(I).filter(id=>(+I[id].nr || 0) > 0);
   if(!ids.length) return null;
   const nr = ids.reduce((a,id)=>a + (+I[id].nr), 0), pag = ids.reduce((a,id)=>a + Math.min(+I[id].pag || 0, +I[id].nr), 0);
-  return {soci:ids.length, nr, pag};
+  const q = quotaCena(y), P = ids.map(id=>pagaCena(I[id], q)), som = k => Math.round(P.reduce((a,p)=>a + p[k], 0) * 100) / 100;
+  return {soci:ids.length, nr, pag, off:som('off'), manca:som('manca'), conDato:P.filter(p=>p.dato!=null).length, senzaDato:P.filter(p=>p.dato==null).length};
 }
 // tutti i soci attivi in ordine di cognome, più chi è stato eliminato ma era già scritto alla cena (così i totali tornano)
 function sociCena(y){ const I = iscrittiCena(y); return S.soci.filter(s=>!s.eliminato || (I[s.id] && +I[s.id].nr > 0)).sort(byNome); }
 function setCenaSocio(y, id, k, el){
   const s = String(el.value).trim(), n = s==='' ? 0 : Number(s);
+  if(k==='dato'){
+    const I = iscrittiCena(y), v = I[id];
+    if(!v || !(+v.nr > 0)){ if(s) alert('Scrivi prima NR: le persone che porta il socio.'); el.value = el.defaultValue = ''; return; }
+    const d = s==='' ? '' : calcolaSomma(s);
+    if(d!=='' && (isNaN(d) || d < 0)){ alert('Scrivi i soldi che ha dato, per esempio 50 oppure 50+20.'); el.value = el.defaultValue; return; }
+    if(d==='') { delete v.dato; delete v.off; } else v.dato = d;
+    save(); aggiornaCena(y, id); return;
+  }
   if(!Number.isInteger(n) || n<0 || n>99){ alert('Scrivi un numero intero, per esempio 2.'); el.value = el.defaultValue; return; }
   S.settings.cenaConti = S.settings.cenaConti || {};
   const c = S.settings.cenaConti[y] = S.settings.cenaConti[y] || {}, I = c.iscritti = c.iscritti || {}, v = I[id] || {nr:0, pag:0};
   if(k==='nr'){
     // i paganti partono uguali a NR; se prima qualcuno non pagava, i non paganti restano quelli
     const nonPag = Math.max(0, (+v.nr || 0) - (+v.pag || 0));
-    if(!n) delete I[id]; else I[id] = {nr:n, pag:Math.max(0, n - nonPag)};
+    if(!n){
+      if(v.dato!=null && !confirm('Questo socio ha già dato dei soldi: togliendo NR si cancella anche il pagamento. Continuare?')){ el.value = el.defaultValue; return; }
+      delete I[id];
+    } else I[id] = Object.assign({}, v, {nr:n, pag:Math.max(0, n - nonPag)});
   } else {
     if(!(+v.nr > 0)){ if(n) alert('Scrivi prima NR: le persone che porta il socio.'); el.value = el.defaultValue = ''; return; }
     if(n > v.nr){ alert(`I paganti sono al massimo ${v.nr}, quante persone porta.`); el.value = el.defaultValue; return; }
-    I[id] = {nr:+v.nr, pag:n};
+    I[id] = Object.assign({}, v, {pag:n});
   }
   save(); aggiornaCena(y, id);
 }
 // dopo una casella: si aggiornano la riga, i totali e i conti, senza ridisegnare la pagina (resta il punto in cui si scrive)
 function aggiornaCena(y, id){
   const v = iscrittiCena(y)[id], r = document.querySelector(`tr[data-cena="${id}"]`);
-  if(r){ const [a, b] = r.querySelectorAll('input'); a.value = a.defaultValue = v ? v.nr : ''; b.value = b.defaultValue = v ? v.pag : ''; r.classList.toggle('si', !!v); }
+  if(r){ const [a, b, c] = r.querySelectorAll('input'); a.value = a.defaultValue = v ? v.nr : ''; b.value = b.defaultValue = v ? v.pag : '';
+    c.value = c.defaultValue = v && v.dato!=null ? fmtDec2(v.dato) : ''; r.querySelector('.esitocena').innerHTML = esitoCena(y, id); r.classList.toggle('si', !!v); }
   const t = $('#cenaTot'); if(t) t.outerHTML = totaliCena(y);
   const b = $('#boxCena'); if(b) b.outerHTML = boxCena();
 }
@@ -3149,17 +3199,22 @@ function aggiornaCena(y, id){
 function invioCena(ev, el){
   if(ev.key!=='Enter') return;
   ev.preventDefault();
-  const tr = el.closest('tr').nextElementSibling, i = tr && tr.querySelector('input');
+  // stessa colonna nella riga sotto (NR, Paganti o Dato)
+  const col = [...el.closest('tr').querySelectorAll('input')].indexOf(el);
+  const tr = el.closest('tr').nextElementSibling, i = tr && tr.querySelectorAll('input')[Math.max(0, col)];
   if(i){ i.focus(); i.select(); } else el.blur();
 }
 function totaliCena(y){
-  const t = tabellaCena(y) || {soci:0, nr:0, pag:0}, q = quotaCena(y), e = n => '€ ' + fmtDec2(n);
+  const t = tabellaCena(y) || {soci:0, nr:0, pag:0, off:0, manca:0, conDato:0, senzaDato:0}, q = quotaCena(y), e = n => '€ ' + fmtDec2(n);
   return `<table id="cenaTot" class="tbl" style="max-width:520px;margin-top:10px"><tbody>
     <tr><td>Soci iscritti alla cena</td><td class="num">${t.soci}</td></tr>
     <tr><td>Totale NR (persone alla cena)</td><td class="num"><b>${t.nr}</b></td></tr>
     <tr><td>Totale paganti</td><td class="num">${t.nr > t.pag ? `<span class="muted small">${t.nr - t.pag} non paganti</span>&nbsp; ` : ''}<b>${t.pag}</b></td></tr>
     <tr><td>Quota a persona</td><td class="num">${e(q)}</td></tr>
-    <tr class="tot" style="font-weight:700"><td>Totale pagamento (paganti per quota)</td><td class="num">${e(Math.round(t.pag * q * 100) / 100)}</td></tr></tbody></table>`;
+    <tr class="tot" style="font-weight:700"><td>Totale pagamento (paganti per quota)</td><td class="num">${e(Math.round(t.pag * q * 100) / 100)}</td></tr>
+    <tr><td>Offerte (resto lasciato alla società)</td><td class="num"><b style="color:#1b7a4b">${e(t.off || 0)}</b></td></tr>
+    <tr class="tot" style="font-weight:700"><td>Totale con le offerte</td><td class="num">${e(Math.round((t.pag * q + (t.off || 0)) * 100) / 100)}</td></tr>
+    ${t.conDato ? `<tr><td>Da incassare ancora${t.senzaDato ? ` <span class="muted small">(più ${t.senzaDato} soci senza "Dato")</span>` : ''}</td><td class="num"${t.manca ? ' style="color:#a8231b"' : ''}><b>${e(t.manca)}</b></td></tr>` : ''}</tbody></table>`;
 }
 function boxTabellaCena(y){
   const I = iscrittiCena(y), cas = (s, k, v) => `<input type="text" inputmode="numeric" class="ncena" autocomplete="off" value="${v}" onchange="setCenaSocio(${y},'${s.id}','${k}',this)" onkeydown="invioCena(event,this)">`;
@@ -3174,14 +3229,15 @@ function boxTabellaCena(y){
       ['va','palline','BINGOTROT',"go('bingo')",'lotteria della sera']])}
     <div class="filters"><label class="chk">Quota a persona €&nbsp;<input type="text" inputmode="numeric" style="width:90px" value="${esc(c.quota!=null && c.quota!=='' ? fmtDec2(c.quota).replace(/\./g,'') : '')}" placeholder="${fmtDec2(quotaLett)}" onchange="setCena(${y},'quota',this.value)"></label>
       <label class="chk">Costi €&nbsp;${campoSomma(c.costi, `setCena(${y},'costi',this.value)`)}</label></div>
-    <div class="tblwrap"><table class="tbl cenatab"><thead><tr><th>Cognome</th><th>Nome</th><th class="ctr">NR</th><th class="ctr">Paganti</th></tr></thead><tbody>
+    <div class="tblwrap"><table class="tbl cenatab"><thead><tr><th>Cognome</th><th>Nome</th><th class="ctr">NR</th><th class="ctr">Paganti</th><th class="ctr">Dato €</th><th>Resto e offerta</th></tr></thead><tbody>
     ${sociCena(y).map(s=>{ const v = I[s.id], si = v && +v.nr > 0;
       return `<tr data-cena="${s.id}" class="${si?'si':''}"><td><b>${esc(s.cognome)}</b>${s.eliminato?' <span class="muted small">(eliminato)</span>':''}</td><td>${esc(s.nome)}</td>
-        <td class="ctr">${cas(s, 'nr', si ? v.nr : '')}</td><td class="ctr">${cas(s, 'pag', si ? Math.min(+v.pag || 0, +v.nr) : '')}</td></tr>`; }).join('')}
+        <td class="ctr">${cas(s, 'nr', si ? v.nr : '')}</td><td class="ctr">${cas(s, 'pag', si ? Math.min(+v.pag || 0, +v.nr) : '')}</td>
+        <td class="ctr">${cas(s, 'dato', si && v.dato!=null ? fmtDec2(v.dato) : '').replace('class="ncena"', 'class="ncena dato"').replace('inputmode="numeric"', 'inputmode="decimal"')}</td><td class="esitocena">${esitoCena(y, s.id)}</td></tr>`; }).join('')}
     </tbody></table></div>
     ${totaliCena(y)}
     ${boxCena()}
-    <p class="help"><b>NR</b> = persone che porta il socio, lui compreso. <b>Paganti</b> parte uguale a NR: abbassalo se qualcuno non paga. Partecipa chi ha NR maggiore di zero; Invio passa al socio sotto. Nei costi scrivi le spese una dopo l'altra col segno +, per esempio 100+25+36+45 (il pulsante + serve se la tastiera del tablet non ha il più). I conti della cena entrano nel bilancio della stagione in Amministrazione.${c.quota==null || c.quota==='' ? ` La quota, se non la scrivi, è quella della lettera d'invito (€ ${fmtDec2(quotaLett)}).` : ''}</p></div>`;
+    <p class="help"><b>NR</b> = persone che porta il socio, lui compreso. <b>Paganti</b> parte uguale a NR: abbassalo se qualcuno non paga. In <b>Dato</b> scrivi i soldi che ti dà: a fianco esce il resto da ridare; <b>Resto in offerta</b> lo lascia tutto alla società, <b>Offerta libera</b> ti fa scrivere quanto lascia e calcola il resto. Partecipa chi ha NR maggiore di zero; Invio passa al socio sotto. Nei costi scrivi le spese una dopo l'altra col segno +, per esempio 100+25+36+45 (il pulsante + serve se la tastiera del tablet non ha il più). I conti della cena entrano nel bilancio della stagione in Amministrazione.${c.quota==null || c.quota==='' ? ` La quota, se non la scrivi, è quella della lettera d'invito (€ ${fmtDec2(quotaLett)}).` : ''}</p></div>`;
 }
 // titolo del foglio: il luogo della lettera d'invito (senza grassetti, fino alla prima virgola)
 function luogoCena(){
@@ -3192,7 +3248,7 @@ function luogoCena(){
 }
 // foglio della cena: una pagina, righe più basse se i soci sono tanti; la seconda colonna NR è vuota, per la penna
 function htmlFoglioCena(y){
-  const I = iscrittiCena(y), soci = sociCena(y), t = tabellaCena(y) || {nr:0, pag:0}, q = quotaCena(y), e = n => '€ ' + fmtDec2(n);
+  const I = iscrittiCena(y), soci = sociCena(y), t = tabellaCena(y) || {nr:0, pag:0, off:0}, q = quotaCena(y), e = n => '€ ' + fmtDec2(n);
   const h = Math.max(3.6, Math.min(7, 236 / Math.max(soci.length, 1))), fs = Math.max(8, Math.min(12, h * 2.1));
   const tit = ['CENA', titoloSoc(), luogoCena(), fmtDate(dataCena(y))].filter(Boolean).join(' ').toUpperCase();
   return `<style>@page{size:A4 portrait;margin:10mm 12mm}
@@ -3202,12 +3258,15 @@ function htmlFoglioCena(y){
     .giudice.cenafg td.c{text-align:center;font-weight:700}
     .giudice.cenafg tr.tot td{font-weight:700;height:${Math.max(h, 6).toFixed(2)}mm}</style>
     <div class="giudice cenafg"><div class="gtit">${esc(tit)}</div>
-    <table><thead><tr><th>COGNOME</th><th>NOME</th><th style="width:20mm">NR</th><th style="width:20mm">NR</th><th style="width:26mm">PAGANTI</th></tr></thead><tbody>
-    ${soci.map(s=>{ const v = I[s.id], si = v && +v.nr > 0;
-      return `<tr><td class="n">${esc(String(s.cognome||'').toUpperCase())}</td><td class="n">${esc(String(s.nome||'').toUpperCase())}</td><td class="c">${si ? v.nr : ''}</td><td></td><td class="c">${si ? Math.min(+v.pag || 0, +v.nr) : ''}</td></tr>`; }).join('')}
-    <tr class="tot"><td colspan="2">TOTALE ISCRITTI ALLA CENA</td><td class="c">${t.nr || ''}</td><td></td><td class="c">${t.pag || ''}</td></tr>
-    <tr class="tot"><td colspan="4">QUOTA A PERSONA</td><td class="r">${e(q)}</td></tr>
-    <tr class="tot"><td colspan="4">TOTALE PAGAMENTO</td><td class="r">${t.pag ? e(Math.round(t.pag * q * 100) / 100) : ''}</td></tr></tbody></table></div>`;
+    <table><thead><tr><th>COGNOME</th><th>NOME</th><th style="width:15mm">NR</th><th style="width:15mm">NR</th><th style="width:22mm">PAGANTI</th><th style="width:22mm">DATO €</th><th style="width:24mm">OFFERTA €</th></tr></thead><tbody>
+    ${soci.map(s=>{ const v = I[s.id], si = v && +v.nr > 0, p = si ? pagaCena(v, q) : null;
+      return `<tr><td class="n">${esc(String(s.cognome||'').toUpperCase())}</td><td class="n">${esc(String(s.nome||'').toUpperCase())}</td><td class="c">${si ? v.nr : ''}</td><td></td><td class="c">${si ? Math.min(+v.pag || 0, +v.nr) : ''}</td>
+        <td class="c">${p && p.dato!=null ? fmtDec2(p.dato) : ''}</td><td class="c">${p && p.off ? fmtDec2(p.off) : ''}</td></tr>`; }).join('')}
+    <tr class="tot"><td colspan="2">TOTALE ISCRITTI ALLA CENA</td><td class="c">${t.nr || ''}</td><td></td><td class="c">${t.pag || ''}</td><td></td><td class="c">${t.off ? fmtDec2(t.off) : ''}</td></tr>
+    <tr class="tot"><td colspan="6">QUOTA A PERSONA</td><td class="r">${e(q)}</td></tr>
+    <tr class="tot"><td colspan="6">TOTALE PAGAMENTO</td><td class="r">${t.pag ? e(Math.round(t.pag * q * 100) / 100) : ''}</td></tr>
+    <tr class="tot"><td colspan="6">OFFERTE</td><td class="r">${t.off ? e(t.off) : ''}</td></tr>
+    <tr class="tot"><td colspan="6">TOTALE CON LE OFFERTE</td><td class="r">${t.pag || t.off ? e(Math.round((t.pag * q + (t.off || 0)) * 100) / 100) : ''}</td></tr></tbody></table></div>`;
 }
 function printFoglioCena(y){ printRaw(htmlFoglioCena(y)); }
 function setCena(y, k, val){
@@ -3225,12 +3284,13 @@ function boxCena(){
   const y = cen.anno || stagioneFinita(), r = contiCena(y), e = n => '€ ' + fmtDec2(n);
   return `<div id="boxCena">${r ? `<table class="tbl" style="max-width:520px;margin-top:8px"><tbody>
       <tr><td>Ricavi: ${r.paganti} paganti per ${e(r.quota)}</td><td class="num">+ ${e(r.ricavi)}</td></tr>
+      ${r.offerte ? `<tr><td>Offerte</td><td class="num">+ ${e(r.offerte)}</td></tr>` : ''}
       <tr><td>Costi</td><td class="num">- ${e(r.costi)}</td></tr>
       <tr class="tot" style="font-weight:700"><td>Risultato della cena</td><td class="num"${r.risultato<0?' style="color:#a8231b"':''}>${e(r.risultato)}</td></tr></tbody></table>` : ''}</div>`;
 }
 // foglio dei conti della cena: stesso aspetto della pagina dei conti della gara (numeri a sinistra, euro a destra)
 function htmlContiCena(y){
-  const r = contiCena(y) || {data:dataCena(y), persone:0, nonPaganti:0, paganti:0, quota:+cenaDati().quota || 0, ricavi:0, costi:0, risultato:0};
+  const r = contiCena(y) || {data:dataCena(y), persone:0, nonPaganti:0, paganti:0, quota:+cenaDati().quota || 0, ricavi:0, offerte:0, costi:0, risultato:0};
   const eur = n => '€ ' + fmtDec2(n);
   const riga = (k, n, e, cl) => `<tr${cl?` class="${cl}"`:''}><td class="k">${k}</td><td class="n">${n}</td><td class="e">${e}</td></tr>`;
   const testa = '<tr><th></th><th>numero</th><th>euro</th></tr>';
@@ -3243,6 +3303,7 @@ function htmlContiCena(y){
       ${riga('Paganti', r.paganti, '', 'tot')}</table>
     <div class="sez">Conti della cena</div><table>${testa}
       ${riga(`Ricavi: quote della cena<small>${r.paganti} paganti per ${eur(r.quota)}</small>`, r.paganti, '+ ' + eur(r.ricavi))}
+      ${r.offerte ? riga('Offerte<small>resto lasciato alla società</small>', '', '+ ' + eur(r.offerte)) : ''}
       ${spese.length > 1 ? spese.map((n, i)=>riga('Spesa ' + (i+1), '', (n < 0 ? '+ ' : '- ') + eur(Math.abs(n)), 'dicui')).join('') : ''}
       ${riga('Costi della cena', '', '- ' + eur(r.costi))}
       ${riga('Risultato della cena', '', eur(r.risultato), 'tot')}</table>
@@ -3602,7 +3663,7 @@ function altriMovimenti(y){
   const out = Object.keys(giorni).map(data=>{ const l = giorni[data], tot = l.reduce((a,x)=>a+x.euro, 0);
     return {data, nome:(l.length===1 ? 'Quota sociale pagata fuori gara: ' : 'Quote sociali pagate fuori gara: ') + l.map(x=>nome(x.s)).join(', '), c:movimento({qSoci:tot, iscrizioni:l.length, totale:tot})}; });
   const cn = contiCena(y);
-  if(cn) out.push({data:cn.data, nome:`Cena sociale (${cn.persone} persone, ${cn.nonPaganti} non paganti)`, cena:true, c:movimento({ricaviSec:cn.ricavi, costiSec:cn.costi, totale:cn.ricavi - cn.costi})});
+  if(cn) out.push({data:cn.data, nome:`Cena sociale (${cn.persone} persone, ${cn.nonPaganti} non paganti${cn.offerte ? ', offerte € ' + fmtDec2(cn.offerte) : ''})`, cena:true, c:movimento({ricaviSec:cn.ricavi + cn.offerte, costiSec:cn.costi, totale:cn.risultato})});
   return out;
 }
 function bilancioStagione(y){

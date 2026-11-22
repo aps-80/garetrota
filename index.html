@@ -562,7 +562,7 @@ html.iphone .kv dd{overflow-wrap:anywhere}
 /* ================= DATI ================= */
 // versione del programma (maggiore.minore.correzione), si vede in Archivio e regolamento.
 // Deve essere uguale a VERSIONE in sw.js ("garetrota-" + questo numero).
-const VERSIONE_APP = '1.5.0';
+const VERSIONE_APP = '1.5.1';
 const LS_KEY = 'gareTrota.dati.v1';
 // tablet (schermo da toccare): in pesatura si apre la tastiera con i numeri
 const TABLET = matchMedia('(pointer:coarse)').matches;
@@ -691,7 +691,18 @@ function save(){
 // L'archivio su Firestore è diviso in documenti (collezione "archivio"): uno per gara (g_<id>),
 // i soci, le impostazioni, il logo e il resto. Ogni documento è {j: testo JSON, t: ora, da: email}.
 // Il collegamento lo fa il modulo in fondo alla pagina; senza Firebase l'app lavora solo qui.
-const Sync = {stato:'spento', email:'', online:false, attesa:0, msg:'', daCaricare:false, hook:null, accedi:null, esci:null};
+const Sync = {stato:'spento', email:'', online:false, attesa:0, msg:'', daCaricare:false, hook:null, accedi:null, esci:null, grandi:{}};
+// Firestore accetta documenti fino a circa 1 MB: oltre non si invia, sopra il 80% si avvisa
+const DOC_MAX = 1000000, DOC_AVVISO = 800000;
+function kb(n){ return Math.round(n/1000).toLocaleString('it-IT') + ' KB'; }
+// spiegazione per un documento troppo grande (o quasi): cosa succede e cosa fare
+function testoDocGrande(id, n, quasi){
+  const cosa = id==='logo' ? 'Scegli un\'immagine più leggera con "Cambia logo" in Archivio e regolamento.'
+    : 'Scarica una copia di sicurezza e avvisa il programmatore.';
+  return quasi
+    ? `I dati "${nomeDoc(id)}" sono quasi al limite di Firebase (${kb(n)} su ${kb(DOC_MAX)}). Per ora si sincronizzano, ma conviene intervenire presto. ${cosa}`
+    : `I dati "${nomeDoc(id)}" sono troppo grandi per Firebase (${kb(n)}, il massimo è ${kb(DOC_MAX)}). Restano salvati su questo dispositivo, ma NON arrivano sugli altri finché non si riducono. ${cosa}`;
+}
 const CHIAVI_FISSE = ['soci','gare','settings','savedAt'];
 function docsArchivio(){
   const d = {}, imp = Object.assign({}, S.settings), resto = {};
@@ -729,7 +740,8 @@ function updateSync(){
   const b = $('#sync'); if(!b) return;
   let testo, cls = 'ok', accedi = false;
   if(Sync.stato==='collegato'){
-    if(Sync.daCaricare){ testo = 'Archivio da caricare'; cls = 'warn'; }
+    if(Object.keys(Sync.grandi).length){ testo = 'Dati non sincronizzati'; cls = 'warn'; }
+    else if(Sync.daCaricare){ testo = 'Archivio da caricare'; cls = 'warn'; }
     else if(Sync.online && !Sync.attesa) testo = 'Sincronizzato';
     else { testo = `In attesa di rete (${Sync.attesa})`; cls = 'warn'; }
   } else if(Sync.stato==='avvio') testo = 'Collegamento…';
@@ -739,10 +751,11 @@ function updateSync(){
 }
 function infoSync(){
   if(Sync.stato!=='collegato'){ alert(Sync.msg || 'Non sei collegato a Firebase: i dati restano su questo dispositivo.'); return; }
-  const stato = Sync.daCaricare ? 'L\'archivio non è ancora su Firebase: caricalo dalla pagina Home.'
+  const grandi = Object.keys(Sync.grandi).map(id=>`<p>${esc(testoDocGrande(id, Sync.grandi[id]))}</p>`).join('');
+  const stato = grandi ? 'Alcuni dati non sono su Firebase:' : Sync.daCaricare ? 'L\'archivio non è ancora su Firebase: caricalo dalla pagina Home.'
     : Sync.online && !Sync.attesa ? 'Tutti i dati sono su Firebase.'
     : `Senza internet: ${Sync.attesa} documenti partono appena torna la rete. Intanto lavori sui dati di questo dispositivo.`;
-  openDlg('Sincronizzazione', `<p>Collegato come <b>${esc(Sync.email)}</b>.</p><p>${stato}</p>`, null,
+  openDlg('Sincronizzazione', `<p>Collegato come <b>${esc(Sync.email)}</b>.</p><p>${stato}</p>${grandi}`, null,
     '<button type="button" class="btn" onclick="closeDlg();Sync.esci()">Esci</button>');
 }
 
@@ -4726,12 +4739,26 @@ async function avvia(){
     salvaBase(); updateSync();
   }
 
+  // avvisa una volta sola per documento (per sessione), non a ogni salvataggio
+  const avvisati = {};
+  function troppoGrande(id, L){
+    const n = new Blob([L]).size;
+    if(n > DOC_MAX){
+      Sync.grandi[id] = n;
+      if(avvisati[id]!=='troppo'){ avvisati[id] = 'troppo'; alert(testoDocGrande(id, n)); }
+      return true;
+    }
+    delete Sync.grandi[id];
+    if(n > DOC_AVVISO && !avvisati[id]){ avvisati[id] = 'quasi'; alert(testoDocGrande(id, n, true)); }
+    return false;
+  }
+
   function inviaDocs(ids, locale){
     const b = F.writeBatch(db), inviati = [];
     ids.forEach(id=>{
       const L = id in locale ? locale[id] : null, ref = F.doc(db, 'archivio', id);
-      if(L==null){ b.delete(ref); delete remoto[id]; }
-      else if(new Blob([L]).size > 1000000){ toast('Documento troppo grande per Firebase: '+id); return; }
+      if(L==null){ b.delete(ref); delete remoto[id]; delete Sync.grandi[id]; }
+      else if(troppoGrande(id, L)) return;
       else { b.set(ref, {j: L, t: F.serverTimestamp(), da: Sync.email}); remoto[id] = L; }
       segna(id, imp(L)); inviati.push(id);
     });

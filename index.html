@@ -118,6 +118,16 @@ label.chk>select{width:auto;margin:0}
 .tbl.cenatab td.esitocena .btn{margin:2px 0 2px 6px}
 .tbl.cenatab tr.si td{background:#e6f4ee}
 .tbl.cenatab input.ncena{width:64px;text-align:center;font-weight:700;padding:5px 4px}
+/* spese della cena: uno scontrino per riquadro, righe che contano o escluse (barrate) */
+.scontr{border:1px solid var(--line);border-radius:8px;padding:10px 10px 4px;margin-bottom:10px;max-width:760px}
+.scontr .filters input.neg{width:200px}
+.scontr .filters input.tsc{width:90px;text-align:right}
+.tbl.spesetab td{padding:3px 5px}
+.tbl.spesetab input.voce{width:100%;min-width:140px}
+.tbl.spesetab input.euro{width:84px;text-align:right}
+.tbl.spesetab input[type=checkbox]{width:20px;height:20px}
+.tbl.spesetab tr.escl input.voce,.tbl.spesetab tr.escl input.euro{text-decoration:line-through;color:var(--muted)}
+.scontr .tenuto{font-size:14px}
 .tbl tr.dim td{color:var(--muted);font-style:italic}
 .tbl tr.abs td{color:var(--muted);background:#fafafa}
 .tbl td.act{text-align:right;white-space:nowrap}
@@ -562,7 +572,7 @@ html.iphone .kv dd{overflow-wrap:anywhere}
 /* ================= DATI ================= */
 // versione del programma (maggiore.minore.correzione), si vede in Archivio e regolamento.
 // Deve essere uguale a VERSIONE in sw.js ("garetrota-" + questo numero).
-const VERSIONE_APP = '1.5.1';
+const VERSIONE_APP = '1.6.0';
 const LS_KEY = 'gareTrota.dati.v1';
 // tablet (schermo da toccare): in pesatura si apre la tastiera con i numeri
 const TABLET = matchMedia('(pointer:coarse)').matches;
@@ -1009,6 +1019,7 @@ const GUIDE = {
     'Scegli la stagione e la gara dalle tendine, poi premi il pulsante verde per <b>stampare</b>.']],
   fineanno: ['Fine anno', ['<b>Novembre</b>: lettera di invito alla <b>cena sociale</b> e classifica generale per la premiazione.',
     'Nella <b>tabella della cena</b> scrivi per ogni socio <b>NR</b> (persone che porta, lui compreso) e quanti <b>pagano</b>: totali e conti si fanno da soli. Il pulsante blu stampa il foglio della cena.',
+    'In <b>Spese della cena</b> scrivi gli scontrini dei negozi e le spese senza scontrino: il totale delle voci che contano va da solo nei costi della cena.',
     '<b>Sera della cena</b>: il pulsante arancio <b>BINGOTROT</b> apre la lotteria.',
     '<b>Dicembre</b>: <b>lettera di auguri</b> con allegato il calendario gare del nuovo anno.']],
   bingo: ['BINGOTROT', ['Prima della cena: <b>Stampa cartelline</b> e il <b>Foglio cartelle prese</b>.',
@@ -3122,7 +3133,7 @@ function quotaCena(y){ const c = cenaConti(y); return c.quota!=null && c.quota!=
 function contiCena(y){
   const c = cenaConti(y), t = tabellaCena(y);
   const persone = t ? t.nr : +c.persone || 0, nonPaganti = t ? t.nr - t.pag : Math.min(+c.nonPaganti || 0, persone);
-  const quota = quotaCena(y), costi = calcolaSomma(c.costi) || 0;
+  const quota = quotaCena(y), costi = Math.round(((calcolaSomma(c.costi) || 0) + totaleSpese(y).tot) * 100) / 100;
   if(!persone && !costi) return null;
   const paganti = persone - nonPaganti, ricavi = Math.round(paganti * quota * 100) / 100, offerte = t ? t.off : 0;
   return {data:dataCena(y), persone, nonPaganti, paganti, quota, ricavi, offerte, costi, risultato:Math.round((ricavi + offerte - costi) * 100) / 100, tabella:!!t};
@@ -3241,7 +3252,7 @@ function boxTabellaCena(y){
       ['st','stampa','Stampa conti della cena',`printContiCena(${y})`,'un foglio A4'],
       ['va','palline','BINGOTROT',"go('bingo')",'lotteria della sera']])}
     <div class="filters"><label class="chk">Quota a persona €&nbsp;<input type="text" inputmode="numeric" style="width:90px" value="${esc(c.quota!=null && c.quota!=='' ? fmtDec2(c.quota).replace(/\./g,'') : '')}" placeholder="${fmtDec2(quotaLett)}" onchange="setCena(${y},'quota',this.value)"></label>
-      <label class="chk">Costi €&nbsp;${campoSomma(c.costi, `setCena(${y},'costi',this.value)`)}</label></div>
+      <label class="chk">${speseCena(y).length ? 'Altri costi' : 'Costi'} €&nbsp;${campoSomma(c.costi, `setCena(${y},'costi',this.value)`)}</label>${speseCena(y).length ? `<span class="muted small">più le spese degli scontrini: € ${fmtDec2(totaleSpese(y).tot)} (scheda qui sotto)</span>` : ''}</div>
     <div class="tblwrap"><table class="tbl cenatab"><thead><tr><th>Cognome</th><th>Nome</th><th class="ctr">NR</th><th class="ctr">Paganti</th><th class="ctr">Dato €</th><th>Resto e offerta</th></tr></thead><tbody>
     ${sociCena(y).map(s=>{ const v = I[s.id], si = v && +v.nr > 0;
       return `<tr data-cena="${s.id}" class="${si?'si':''}"><td><b>${esc(s.cognome)}</b>${s.eliminato?' <span class="muted small">(eliminato)</span>':''}</td><td>${esc(s.nome)}</td>
@@ -3250,7 +3261,7 @@ function boxTabellaCena(y){
     </tbody></table></div>
     ${totaliCena(y)}
     ${boxCena()}
-    <p class="help"><b>NR</b> = persone che porta il socio, lui compreso. <b>Paganti</b> parte uguale a NR: abbassalo se qualcuno non paga. In <b>Dato</b> scrivi i soldi che ti dà: a fianco esce il resto da ridare; <b>Resto in offerta</b> lo lascia tutto alla società, <b>Offerta libera</b> ti fa scrivere quanto lascia e calcola il resto. Partecipa chi ha NR maggiore di zero; Invio passa al socio sotto. Nei costi scrivi le spese una dopo l'altra col segno +, per esempio 100+25+36+45 (il pulsante + serve se la tastiera del tablet non ha il più). I conti della cena entrano nel bilancio della stagione in Amministrazione.${c.quota==null || c.quota==='' ? ` La quota, se non la scrivi, è quella della lettera d'invito (€ ${fmtDec2(quotaLett)}).` : ''}</p></div>`;
+    <p class="help"><b>NR</b> = persone che porta il socio, lui compreso. <b>Paganti</b> parte uguale a NR: abbassalo se qualcuno non paga. In <b>Dato</b> scrivi i soldi che ti dà: a fianco esce il resto da ridare; <b>Resto in offerta</b> lo lascia tutto alla società, <b>Offerta libera</b> ti fa scrivere quanto lascia e calcola il resto. Partecipa chi ha NR maggiore di zero; Invio passa al socio sotto. Gli scontrini si scrivono nella scheda <b>Spese della cena</b> qui sotto. Nella casella dei costi puoi scrivere altre spese una dopo l'altra col segno +, per esempio 100+25+36+45 (il pulsante + serve se la tastiera del tablet non ha il più). I conti della cena entrano nel bilancio della stagione in Amministrazione.${c.quota==null || c.quota==='' ? ` La quota, se non la scrivi, è quella della lettera d'invito (€ ${fmtDec2(quotaLett)}).` : ''}</p></div>`;
 }
 // titolo del foglio: il luogo della lettera d'invito (senza grassetti, fino alla prima virgola)
 function luogoCena(){
@@ -3282,6 +3293,124 @@ function htmlFoglioCena(y){
     <tr class="tot"><td colspan="6">TOTALE CON LE OFFERTE</td><td class="r">${t.pag || t.off ? e(Math.round((t.pag * q + (t.off || 0)) * 100) / 100) : ''}</td></tr></tbody></table></div>`;
 }
 function printFoglioCena(y){ printRaw(htmlFoglioCena(y)); }
+/* spese della cena (1.6.0): scontrini di più negozi, voci che contano o escluse (barrate), spese senza scontrino.
+   S.settings.cenaConti[anno].spese = [{id, negozio, data, tot, senza, righe:[{id, d, e, no, cat}]}]
+   tot = totale stampato sullo scontrino (solo per confronto), no = voce esclusa, cat = Cena | Bingo | Premiazione (solo parziali).
+   Le voci che contano si sommano alla casella dei costi: tutto va nei costi della cena e nel bilancio. */
+const CAT_SPESA = ['Cena', 'Bingo', 'Premiazione'];
+function cent(n){ return Math.round(n * 100) / 100; }
+function speseCena(y){ return cenaConti(y).spese || []; }
+function tenutoScontrino(s){ return cent((s.righe || []).reduce((a,r)=>a + (r.no ? 0 : +r.e || 0), 0)); }
+function totaleSpese(y){
+  const cat = {}; let tot = 0;
+  speseCena(y).forEach(s=>(s.righe || []).forEach(r=>{ if(r.no || !+r.e) return; const k = r.cat || 'Cena'; cat[k] = cent((cat[k] || 0) + +r.e); tot += +r.e; }));
+  return {tot:cent(tot), cat, n:speseCena(y).length};
+}
+function contiAnnoCena(y){ S.settings.cenaConti = S.settings.cenaConti || {}; return S.settings.cenaConti[y] = S.settings.cenaConti[y] || {}; }
+function trovaScontrino(y, sid){ return speseCena(y).find(s=>s.id===sid); }
+function nuovaRigaSpesa(){ return {id:uid(), d:'', e:'', cat:'Cena'}; }
+function nuovoScontrino(y, senza){
+  const c = contiAnnoCena(y), s = {id:uid(), negozio:'', data:today(), righe:[nuovaRigaSpesa()]};
+  if(senza) s.senza = true;
+  (c.spese = c.spese || []).push(s);
+  save(); render();
+  const i = document.querySelector(`.scontr[data-sc="${s.id}"] input.${senza ? 'voce' : 'neg'}`); if(i){ i.focus(); i.scrollIntoView({block:'center'}); }
+}
+function togliScontrino(y, sid){
+  const c = contiAnnoCena(y), s = trovaScontrino(y, sid); if(!s) return;
+  if(tenutoScontrino(s) && !confirm(`Togliere ${s.negozio ? 'lo scontrino ' + s.negozio : 'questa spesa'} (€ ${fmtDec2(tenutoScontrino(s))})?`)) return;
+  c.spese = c.spese.filter(x=>x.id!==sid); if(!c.spese.length) delete c.spese;
+  save(); render();
+}
+function setScontrino(y, sid, k, el){
+  const s = trovaScontrino(y, sid); if(!s) return;
+  const v = String(el.value).trim();
+  if(k==='tot'){
+    const n = v==='' ? '' : calcolaSomma(v);
+    if(n!=='' && (isNaN(n) || n < 0)){ alert('Scrivi il totale dello scontrino, per esempio 82,05.'); el.value = el.defaultValue; return; }
+    if(n==='') delete s.tot; else s.tot = n;
+    el.value = el.defaultValue = n==='' ? '' : fmtDec2(n);
+  } else if(v==='') delete s[k]; else s[k] = v;
+  save(); aggiornaSpese(y, sid);
+}
+function nuovaRiga(y, sid){
+  const s = trovaScontrino(y, sid); if(!s) return;
+  const r = nuovaRigaSpesa(), ult = (s.righe || [])[s.righe.length - 1];
+  if(ult && ult.cat) r.cat = ult.cat;
+  (s.righe = s.righe || []).push(r);
+  save(); render();
+  const i = document.querySelector(`tr[data-riga="${r.id}"] input.voce`); if(i) i.focus();
+}
+function togliRiga(y, sid, rid){
+  const s = trovaScontrino(y, sid); if(!s) return;
+  s.righe = (s.righe || []).filter(r=>r.id!==rid);
+  save(); render();
+}
+function setRiga(y, sid, rid, k, el){
+  const s = trovaScontrino(y, sid), r = s && (s.righe || []).find(x=>x.id===rid); if(!r) return;
+  if(k==='conta'){ if(el.checked) delete r.no; else r.no = true; el.closest('tr').classList.toggle('escl', !!r.no); }
+  else if(k==='e'){
+    const v = String(el.value).trim(), n = v==='' ? '' : calcolaSomma(v);
+    if(n!=='' && isNaN(n)){ alert('Scrivi l\'importo, per esempio 11,97 oppure 3,99+3,99+3,99.'); el.value = el.defaultValue; return; }
+    r.e = n; el.value = el.defaultValue = n==='' ? '' : fmtDec2(n);
+  }
+  else r[k] = String(el.value).trim();
+  save(); aggiornaSpese(y, sid);
+}
+// Invio: dalla voce all'importo, dall'importo alla voce sotto (nell'ultima riga ne aggiunge una)
+function invioSpesa(ev, el, y, sid){
+  if(ev.key!=='Enter') return;
+  ev.preventDefault();
+  if(el.classList.contains('voce')){ const e = el.closest('tr').querySelector('input.euro'); e.focus(); e.select(); return; }
+  el.blur();
+  const tr = el.closest('tr').nextElementSibling;
+  if(tr){ const v = tr.querySelector('input.voce'); v.focus(); } else nuovaRiga(y, sid);
+}
+// dopo una casella: si aggiornano solo i totali, senza ridisegnare la pagina
+function aggiornaSpese(y, sid){
+  const s = trovaScontrino(y, sid), t = document.querySelector(`.scontr[data-sc="${sid}"] .tenuto`);
+  if(s && t) t.innerHTML = tenutoHtml(s);
+  const tt = $('#speseTot'); if(tt) tt.outerHTML = totaliSpese(y);
+  const b = $('#boxCena'); if(b) b.outerHTML = boxCena();
+  const n = $('#speseNota'); if(n) n.textContent = '€ ' + fmtDec2(totaleSpese(y).tot);
+}
+function tenutoHtml(s){
+  const n = tenutoScontrino(s), tot = s.tot!=null && s.tot!=='' ? +s.tot : null;
+  return `Conta <b>€ ${fmtDec2(n)}</b>${tot!=null ? ` su € ${fmtDec2(tot)} dello scontrino${cent(tot - n) ? ` <span class="muted">(escluso € ${fmtDec2(cent(tot - n))})</span>` : ''}` : ''}`;
+}
+function totaliSpese(y){
+  const t = totaleSpese(y), c = cenaConti(y), altri = calcolaSomma(c.costi) || 0, cats = CAT_SPESA.concat(Object.keys(t.cat).filter(k=>CAT_SPESA.indexOf(k)<0)).filter(k=>t.cat[k]);
+  const pers = (contiCena(y) || {}).persone || 0, tutto = cent(t.tot + altri);
+  return `<table id="speseTot" class="tbl" style="max-width:520px;margin-top:6px"><tbody>
+    ${cats.length > 1 ? cats.map(k=>`<tr><td>di cui ${esc(k)}</td><td class="num">€ ${fmtDec2(t.cat[k])}</td></tr>`).join('') : ''}
+    <tr class="tot" style="font-weight:700"><td>Totale spese degli scontrini</td><td class="num">€ ${fmtDec2(t.tot)}</td></tr>
+    ${altri ? `<tr><td>Altri costi (casella sopra)</td><td class="num">€ ${fmtDec2(altri)}</td></tr><tr class="tot" style="font-weight:700"><td>Costi della cena</td><td class="num">€ ${fmtDec2(tutto)}</td></tr>` : ''}
+    ${pers ? `<tr><td>Costo a persona <span class="muted small">(${pers} persone alla cena)</span></td><td class="num">€ ${fmtDec2(cent(tutto / pers))}</td></tr>` : ''}</tbody></table>`;
+}
+function scontrinoHtml(y, s){
+  const a = (k, extra) => `onchange="setScontrino(${y},'${s.id}','${k}',this)"${extra || ''}`;
+  const righe = (s.righe || []).map(r=>`<tr data-riga="${r.id}" class="${r.no ? 'escl' : ''}">
+      <td class="ctr"><input type="checkbox" title="Conta nei costi (togli la spunta per le voci barrate)" ${r.no ? '' : 'checked'} onchange="setRiga(${y},'${s.id}','${r.id}','conta',this)"></td>
+      <td><input type="text" class="voce" autocomplete="off" value="${esc(r.d || '')}" placeholder="es. cornici per le pergamene" onchange="setRiga(${y},'${s.id}','${r.id}','d',this)" onkeydown="invioSpesa(event,this,${y},'${s.id}')"></td>
+      <td class="num"><input type="text" class="euro" inputmode="decimal" autocomplete="off" value="${r.e!=='' && r.e!=null ? fmtDec2(r.e) : ''}" placeholder="0,00" onchange="setRiga(${y},'${s.id}','${r.id}','e',this)" onkeydown="invioSpesa(event,this,${y},'${s.id}')"></td>
+      <td><select onchange="setRiga(${y},'${s.id}','${r.id}','cat',this)">${CAT_SPESA.map(k=>`<option ${k===(r.cat || 'Cena') ? 'selected' : ''}>${k}</option>`).join('')}</select></td>
+      <td class="act"><button type="button" class="btn sm danger" onclick="togliRiga(${y},'${s.id}','${r.id}')">Togli</button></td></tr>`).join('');
+  return `<div class="scontr" data-sc="${s.id}"><div class="filters">
+      <label class="chk">${s.senza ? 'Spesa senza scontrino' : 'Negozio'}&nbsp;<input type="text" class="neg" autocomplete="off" value="${esc(s.negozio || '')}" placeholder="${s.senza ? 'es. cartoline auguri' : 'es. Visotto'}" ${a('negozio')}></label>
+      <label class="chk">Data&nbsp;<input type="date" value="${esc(s.data || '')}" ${a('data')}></label>
+      ${s.senza ? '' : `<label class="chk">Totale scontrino €&nbsp;<input type="text" class="tsc" inputmode="decimal" autocomplete="off" value="${s.tot!=null && s.tot!=='' ? fmtDec2(s.tot) : ''}" placeholder="0,00" ${a('tot')}></label>`}
+      <span class="sp"></span><button type="button" class="btn sm danger" onclick="togliScontrino(${y},'${s.id}')">Togli ${s.senza ? 'la spesa' : 'lo scontrino'}</button></div>
+    <div class="tblwrap"><table class="tbl spesetab"><thead><tr><th class="ctr">Conta</th><th>Voce</th><th class="num">Euro</th><th>Per</th><th></th></tr></thead><tbody>${righe}</tbody></table></div>
+    <div class="filters" style="margin-top:6px"><button type="button" class="btn sm" onclick="nuovaRiga(${y},'${s.id}')">+ Voce</button><span class="tenuto">${tenutoHtml(s)}</span></div></div>`;
+}
+function boxSpeseCena(y){
+  const sp = speseCena(y);
+  return `<div class="card"><div class="toolbar"><h3 style="margin:0 8px 0 0">Spese della cena ${y}</h3><span class="muted small">cena, premi del BINGOTROT e premiazione</span></div>
+    ${sp.map(s=>scontrinoHtml(y, s)).join('')}
+    <div class="filters"><button type="button" class="btn primary" onclick="nuovoScontrino(${y})">Aggiungi scontrino</button><button type="button" class="btn" onclick="nuovoScontrino(${y},1)">Spesa senza scontrino</button></div>
+    ${sp.length ? totaliSpese(y) : ''}
+    <p class="help">Per ogni scontrino scrivi il negozio e, se vuoi, il totale stampato. Poi scrivi le voci: quelle che non c'entrano si possono lasciare senza spunta in <b>Conta</b> (come barrarle sullo scontrino), oppure non scriverle proprio. Nell'importo puoi scrivere anche una somma, per esempio 11,97+20,93. <b>Per</b> serve solo a vedere quanto va alla cena, al BINGOTROT e alla premiazione: tutto entra nei costi della cena e nel bilancio. Invio passa all'importo e poi alla voce sotto.</p></div>`;
+}
 function setCena(y, k, val){
   const s = String(val).trim();
   let v = s;
@@ -3298,7 +3427,7 @@ function boxCena(){
   return `<div id="boxCena">${r ? `<table class="tbl" style="max-width:520px;margin-top:8px"><tbody>
       <tr><td>Ricavi: ${r.paganti} paganti per ${e(r.quota)}</td><td class="num">+ ${e(r.ricavi)}</td></tr>
       ${r.offerte ? `<tr><td>Offerte</td><td class="num">+ ${e(r.offerte)}</td></tr>` : ''}
-      <tr><td>Costi</td><td class="num">- ${e(r.costi)}</td></tr>
+      <tr><td>Costi${totaleSpese(y).n ? ` <span class="muted small">(scontrini € ${fmtDec2(totaleSpese(y).tot)}${calcolaSomma(cenaConti(y).costi) ? ' + altri € ' + fmtDec2(calcolaSomma(cenaConti(y).costi)) : ''})</span>` : ''}</td><td class="num">- ${e(r.costi)}</td></tr>
       <tr class="tot" style="font-weight:700"><td>Risultato della cena</td><td class="num"${r.risultato<0?' style="color:#a8231b"':''}>${e(r.risultato)}</td></tr></tbody></table>` : ''}</div>`;
 }
 // foglio dei conti della cena: stesso aspetto della pagina dei conti della gara (numeri a sinistra, euro a destra)
@@ -3308,7 +3437,12 @@ function htmlContiCena(y){
   const riga = (k, n, e, cl) => `<tr${cl?` class="${cl}"`:''}><td class="k">${k}</td><td class="n">${n}</td><td class="e">${e}</td></tr>`;
   const testa = '<tr><th></th><th>numero</th><th>euro</th></tr>';
   // le spese scritte nella casella dei costi, una per una
-  const spese = (String(cenaConti(y).costi || '').replace(/\s/g,'').match(/[-+]?[\d.,]+/g) || []).map(numeroIt).filter(n=>n);
+  // prima gli scontrini (negozio, data e voci che contano), poi le spese della casella dei costi
+  const sc = speseCena(y).map(s=>({s, n:tenutoScontrino(s)})).filter(x=>x.n);
+  const altre = (String(cenaConti(y).costi || '').replace(/\s/g,'').match(/[-+]?[\d.,]+/g) || []).map(numeroIt).filter(n=>n);
+  const voci = sc.map(({s, n})=>({k:`${esc(s.negozio || (s.senza ? 'Spesa senza scontrino' : 'Scontrino'))}${s.data ? ' del ' + fmtDate(s.data) : ''}<small>${esc((s.righe||[]).filter(r=>!r.no && +r.e && r.d).map(r=>r.d).join(', '))}</small>`, n}))
+    .concat(altre.map((n, i)=>({k:(sc.length ? 'Altra spesa ' : 'Spesa ') + (i+1), n})));
+  const cat = totaleSpese(y).cat, cats = Object.keys(cat);
   return `<style>@page{size:A4 portrait;margin:14mm}</style><div class="totpag"><div class="gtit">${esc(titoloSoc())}  Cena sociale ${y}  ${esc(giornoEsteso(r.data))}</div>
     <div class="sez">Partecipanti</div><table>${testa}
       ${riga('Partecipanti alla cena', r.persone, '')}
@@ -3317,7 +3451,8 @@ function htmlContiCena(y){
     <div class="sez">Conti della cena</div><table>${testa}
       ${riga(`Ricavi: quote della cena<small>${r.paganti} paganti per ${eur(r.quota)}</small>`, r.paganti, '+ ' + eur(r.ricavi))}
       ${r.offerte ? riga('Offerte<small>resto lasciato alla società</small>', '', '+ ' + eur(r.offerte)) : ''}
-      ${spese.length > 1 ? spese.map((n, i)=>riga('Spesa ' + (i+1), '', (n < 0 ? '+ ' : '- ') + eur(Math.abs(n)), 'dicui')).join('') : ''}
+      ${voci.length > 1 || sc.length ? voci.map(v=>riga(v.k, '', (v.n < 0 ? '+ ' : '- ') + eur(Math.abs(v.n)), 'dicui')).join('') : ''}
+      ${cats.length > 1 ? riga('Scontrini per voce<small>' + cats.map(k=>esc(k) + ' € ' + fmtDec2(cat[k])).join(' · ') + '</small>', '', '', 'dicui') : ''}
       ${riga('Costi della cena', '', '- ' + eur(r.costi))}
       ${riga('Risultato della cena', '', eur(r.risultato), 'tot')}</table>
     <p class="nota">Stampato il ${fmtDate(today())}. Il risultato della cena entra nel bilancio della stagione ${y} (Amministrazione).</p></div>`;
@@ -3359,7 +3494,8 @@ function viewFineAnno(){
       ['st','lettera','Lettera di auguri',"openAuguri()",'con il calendario '+(y+1)],
       ['st','lettera','Lettera ai fornitori',"openLetteraNatale('fornitori')",'auguri di Natale e grazie'],
       ['st','lettera','Lettera a chi ci ospita',"openLetteraNatale('ospitanti')","grazie per l'ospitalità"]])}</div>
-  ${boxTabellaCena(cen.anno || y)}`;
+  ${boxTabellaCena(cen.anno || y)}
+  ${boxSpeseCena(cen.anno || y)}`;
 }
 // pagina della lotteria BINGOTROT (dal pulsante arancio in Fine anno)
 function viewBingo(){

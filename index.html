@@ -179,6 +179,16 @@ label.chk>select{width:auto;margin:0}
 .tabs{display:flex;margin-bottom:10px}
 .tabs button{font:inherit;border:1px solid var(--line);background:#fff;padding:7px 14px;border-radius:6px;cursor:pointer;margin-right:4px}
 .tabs button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* Fine anno: barra fissa in cima con le parti della pagina (una alla volta), sotto il menu verde */
+.navcena{position:sticky;top:var(--hdr,44px);z-index:4;display:flex;flex-wrap:wrap;background:var(--bg);margin:-4px -2px 8px;padding:6px 2px 4px;border-bottom:2px solid var(--line)}
+.navcena button{font:inherit;flex:1 1 150px;min-height:54px;margin:0 6px 4px 0;padding:6px 10px;border:2px solid var(--accent);border-radius:8px;background:#fff;color:var(--accent);font-size:16px;font-weight:700;line-height:1.2;cursor:pointer;text-align:center}
+.navcena button small{display:block;font-size:12px;font-weight:400;color:var(--muted);margin-top:2px}
+.navcena button.on{background:var(--accent);color:#fff}
+.navcena button.on small{color:#e3f1ec}
+.navcena button.va{border-color:#b05d0c;color:#b05d0c}
+.navcena button.va.on{background:#b05d0c;color:#fff}
+.navcena button:focus-visible{outline:3px solid #ffbf47;outline-offset:2px}
+@media (max-width:700px){.navcena{flex-wrap:nowrap;overflow-x:auto}.navcena button{flex:0 0 auto;min-height:48px;font-size:14px}}
 .kv{display:grid;grid-template-columns:auto 1fr;grid-gap:3px 14px;margin:0}
 .kv dt{color:var(--muted)}.kv dd{margin:0}
 .addrow{display:flex;justify-content:space-between;align-items:center;padding:5px 4px;border-bottom:1px solid var(--line);cursor:pointer}
@@ -572,7 +582,7 @@ html.iphone .kv dd{overflow-wrap:anywhere}
 /* ================= DATI ================= */
 // versione del programma (maggiore.minore.correzione), si vede in Archivio e regolamento.
 // Deve essere uguale a VERSIONE in sw.js ("garetrota-" + questo numero).
-const VERSIONE_APP = '1.6.0';
+const VERSIONE_APP = '1.6.1';
 const LS_KEY = 'gareTrota.dati.v1';
 // tablet (schermo da toccare): in pesatura si apre la tastiera con i numeri
 const TABLET = matchMedia('(pointer:coarse)').matches;
@@ -988,12 +998,16 @@ function render(){
   document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.v===view || (view==='gara' && b.dataset.v==='gare') || (view==='bingo' && b.dataset.v==='fineanno')));
   const fn = {home:viewHome, soci:viewSoci, gare:viewGare, gara:viewGara, pesatura:viewPesatura, classifiche:viewClassifiche, fineanno:viewFineAnno, bingo:viewBingo, stampe:viewStampe, amministrazione:viewAmministrazione, archivio:viewArchivio}[view];
   $('main').innerHTML = guida(view) + fn();
+  // altezza del menu verde in alto: la barra di Fine anno si ferma subito sotto
+  document.documentElement.style.setProperty('--hdr', $('header').offsetHeight + 'px');
   $('#btnAiuto').classList.toggle('on', aiuto);
   updateStatus(); updateSync();
   if(view==='soci') renderSociTable();
   if(view==='gara') renderAddList();
   if(view==='pesatura') afterPesatura();
 }
+// tablet girato: il menu verde cambia altezza, la barra di Fine anno lo segue
+window.addEventListener('resize', ()=>document.documentElement.style.setProperty('--hdr', $('header').offsetHeight + 'px'));
 
 /* ================= HOME ================= */
 /* ================= AIUTO: spiegazioni brevi in cima a ogni pagina ================= */
@@ -1020,6 +1034,7 @@ const GUIDE = {
   fineanno: ['Fine anno', ['<b>Novembre</b>: lettera di invito alla <b>cena sociale</b> e classifica generale per la premiazione.',
     'Nella <b>tabella della cena</b> scrivi per ogni socio <b>NR</b> (persone che porta, lui compreso) e quanti <b>pagano</b>: totali e conti si fanno da soli. Il pulsante blu stampa il foglio della cena.',
     'In <b>Spese della cena</b> scrivi gli scontrini dei negozi e le spese senza scontrino: il totale delle voci che contano va da solo nei costi della cena.',
+    'I pulsanti grandi in cima (<b>Lettere e stampe</b>, <b>Partecipanti e paganti</b>, <b>Spese della cena</b>, <b>Conti della cena</b>, <b>BINGOTROT</b>) mostrano una parte della pagina alla volta: restano sempre in vista, anche scorrendo.',
     '<b>Sera della cena</b>: il pulsante arancio <b>BINGOTROT</b> apre la lotteria.',
     '<b>Dicembre</b>: <b>lettera di auguri</b> con allegato il calendario gare del nuovo anno.']],
   bingo: ['BINGOTROT', ['Prima della cena: <b>Stampa cartelline</b> e il <b>Foglio cartelle prese</b>.',
@@ -3125,7 +3140,7 @@ function problemiCartelle(){
 }
 /* conti della cena sociale, per stagione: S.settings.cenaConti[anno] = {persone, nonPaganti, quota, costi}
    "costi" è il testo della casella delle somme (es. "100+25+36"), così si può controllare e aggiungere */
-const cen = {anno:null};
+const cen = {anno:null, tab:'cena'};
 function cenaConti(y){ return (S.settings.cenaConti || {})[y] || {}; }
 function dataCena(y){ const d = cenaDati(); return d.data && d.data.slice(0,4)==String(y) ? d.data : sabatoDopo(ultimaGaraStagione(y)); }
 function quotaCena(y){ const c = cenaConti(y); return c.quota!=null && c.quota!=='' ? +c.quota : +cenaDati().quota || 0; }
@@ -3218,6 +3233,7 @@ function aggiornaCena(y, id){
     c.value = c.defaultValue = v && v.dato!=null ? fmtDec2(v.dato) : ''; r.querySelector('.esitocena').innerHTML = esitoCena(y, id); r.classList.toggle('si', !!v); }
   const t = $('#cenaTot'); if(t) t.outerHTML = totaliCena(y);
   const b = $('#boxCena'); if(b) b.outerHTML = boxCena();
+  const nb = $('.navcena'); if(nb) nb.outerHTML = barraCena(cen.tab); // numeri sotto i pulsanti in cima
 }
 // Invio: si passa al socio sotto
 function invioCena(ev, el){
@@ -3252,7 +3268,7 @@ function boxTabellaCena(y){
       ['st','stampa','Stampa conti della cena',`printContiCena(${y})`,'un foglio A4'],
       ['va','palline','BINGOTROT',"go('bingo')",'lotteria della sera']])}
     <div class="filters"><label class="chk">Quota a persona €&nbsp;<input type="text" inputmode="numeric" style="width:90px" value="${esc(c.quota!=null && c.quota!=='' ? fmtDec2(c.quota).replace(/\./g,'') : '')}" placeholder="${fmtDec2(quotaLett)}" onchange="setCena(${y},'quota',this.value)"></label>
-      <label class="chk">${speseCena(y).length ? 'Altri costi' : 'Costi'} €&nbsp;${campoSomma(c.costi, `setCena(${y},'costi',this.value)`)}</label>${speseCena(y).length ? `<span class="muted small">più le spese degli scontrini: € ${fmtDec2(totaleSpese(y).tot)} (scheda qui sotto)</span>` : ''}</div>
+      <label class="chk">${speseCena(y).length ? 'Altri costi' : 'Costi'} €&nbsp;${campoSomma(c.costi, `setCena(${y},'costi',this.value)`)}</label>${speseCena(y).length ? `<span class="muted small">più le spese degli scontrini: € ${fmtDec2(totaleSpese(y).tot)} (pulsante "Spese della cena" in alto)</span>` : ''}</div>
     <div class="tblwrap"><table class="tbl cenatab"><thead><tr><th>Cognome</th><th>Nome</th><th class="ctr">NR</th><th class="ctr">Paganti</th><th class="ctr">Dato €</th><th>Resto e offerta</th></tr></thead><tbody>
     ${sociCena(y).map(s=>{ const v = I[s.id], si = v && +v.nr > 0;
       return `<tr data-cena="${s.id}" class="${si?'si':''}"><td><b>${esc(s.cognome)}</b>${s.eliminato?' <span class="muted small">(eliminato)</span>':''}</td><td>${esc(s.nome)}</td>
@@ -3261,7 +3277,7 @@ function boxTabellaCena(y){
     </tbody></table></div>
     ${totaliCena(y)}
     ${boxCena()}
-    <p class="help"><b>NR</b> = persone che porta il socio, lui compreso. <b>Paganti</b> parte uguale a NR: abbassalo se qualcuno non paga. In <b>Dato</b> scrivi i soldi che ti dà: a fianco esce il resto da ridare; <b>Resto in offerta</b> lo lascia tutto alla società, <b>Offerta libera</b> ti fa scrivere quanto lascia e calcola il resto. Partecipa chi ha NR maggiore di zero; Invio passa al socio sotto. Gli scontrini si scrivono nella scheda <b>Spese della cena</b> qui sotto. Nella casella dei costi puoi scrivere altre spese una dopo l'altra col segno +, per esempio 100+25+36+45 (il pulsante + serve se la tastiera del tablet non ha il più). I conti della cena entrano nel bilancio della stagione in Amministrazione.${c.quota==null || c.quota==='' ? ` La quota, se non la scrivi, è quella della lettera d'invito (€ ${fmtDec2(quotaLett)}).` : ''}</p></div>`;
+    <p class="help"><b>NR</b> = persone che porta il socio, lui compreso. <b>Paganti</b> parte uguale a NR: abbassalo se qualcuno non paga. In <b>Dato</b> scrivi i soldi che ti dà: a fianco esce il resto da ridare; <b>Resto in offerta</b> lo lascia tutto alla società, <b>Offerta libera</b> ti fa scrivere quanto lascia e calcola il resto. Partecipa chi ha NR maggiore di zero; Invio passa al socio sotto. Gli scontrini si scrivono in <b>Spese della cena</b> (pulsante in alto). Nella casella dei costi puoi scrivere altre spese una dopo l'altra col segno +, per esempio 100+25+36+45 (il pulsante + serve se la tastiera del tablet non ha il più). I conti della cena entrano nel bilancio della stagione in Amministrazione.${c.quota==null || c.quota==='' ? ` La quota, se non la scrivi, è quella della lettera d'invito (€ ${fmtDec2(quotaLett)}).` : ''}</p></div>`;
 }
 // titolo del foglio: il luogo della lettera d'invito (senza grassetti, fino alla prima virgola)
 function luogoCena(){
@@ -3372,6 +3388,7 @@ function aggiornaSpese(y, sid){
   if(s && t) t.innerHTML = tenutoHtml(s);
   const tt = $('#speseTot'); if(tt) tt.outerHTML = totaliSpese(y);
   const b = $('#boxCena'); if(b) b.outerHTML = boxCena();
+  const nb = $('.navcena'); if(nb) nb.outerHTML = barraCena(cen.tab); // numeri sotto i pulsanti in cima
   const n = $('#speseNota'); if(n) n.textContent = '€ ' + fmtDec2(totaleSpese(y).tot);
 }
 function tenutoHtml(s){
@@ -3482,20 +3499,43 @@ function campoSomma(val, onchange, largo, persone){
 function esitoSomma(t, persone){ t = String(t||'').trim(); if(!/\d\s*[-+]/.test(t)) return /^[\d.,\s]*$/.test(t) ? '' : 'da correggere'; const n = calcolaSomma(t); return isNaN(n) ? 'da correggere' : persone ? '= ' + n : '= € ' + fmtDec2(n); }
 function mostraSomma(i){ i.parentNode.querySelector('.esito').textContent = esitoSomma(i.value, !!i.dataset.persone); }
 function piuSomma(b){ const i = b.parentNode.querySelector('input'); if(i.value.trim() && !/[+]$/.test(i.value.trim())) i.value = i.value.trim() + '+'; i.focus(); mostraSomma(i); }
-// Fine anno: in cima la tabella della cena, poi i conti della cena e le lettere. BINGOTROT ha la sua pagina (viewBingo)
+// Fine anno: barra in cima con le parti della pagina, se ne vede una alla volta (cen.tab). BINGOTROT ha la sua pagina (viewBingo)
+// le parti nuove vanno aggiunte anche qui, così si trovano senza scorrere
+function barraCena(attiva){
+  const y = cen.anno || stagioneFinita(), t = tabellaCena(y), sp = totaleSpese(y), r = contiCena(y);
+  const voci = [
+    ['lettere', 'Lettere e stampe', 'inviti, buste, auguri'],
+    ['cena', 'Partecipanti e paganti', t ? `${t.nr} persone, ${t.pag} paganti` : 'nessuno ancora'],
+    ['spese', 'Spese della cena', sp.n ? `${sp.n} ${sp.n === 1 ? 'spesa' : 'spese'}, € ${fmtDec2(sp.tot)}` : 'scontrini'],
+    ['conti', 'Conti della cena', r ? `risultato € ${fmtDec2(r.risultato)}` : 'ricavi e costi'],
+    ['bingo', 'BINGOTROT', 'lotteria della sera']];
+  return `<div class="navcena" role="tablist">${voci.map(([k, tit, sub])=>
+    `<button type="button" role="tab" class="${k === 'bingo' ? 'va' : ''}${k === attiva ? ' on' : ''}" aria-selected="${k === attiva}" onclick="${k === 'bingo' ? "go('bingo')" : `cen.tab='${k}';go('fineanno')`}">${tit}<small>${sub}</small></button>`).join('')}</div>`;
+}
+function boxContiCena(y){
+  return `<div class="card"><div class="toolbar"><h3 style="margin:0 8px 0 0">Conti della cena ${y}</h3><span class="muted small">partecipanti, quote, offerte, costi e risultato</span></div>
+    ${menuSezione([['st','stampa','Stampa conti della cena',`printContiCena(${y})`,'un foglio A4']])}
+    ${totaliCena(y)}
+    ${boxCena()}
+    <p class="help">I numeri vengono da <b>Partecipanti e paganti</b> (persone, quota, dato e offerte) e da <b>Spese della cena</b> (scontrini e altri costi). Il risultato entra nel bilancio della stagione in Amministrazione.</p></div>`;
+}
 function viewFineAnno(){
-  const y = stagioneFinita();
-  return `<div class="toolbar"><h2>Fine anno</h2></div>
-  <div class="card"><h3>Cena sociale e auguri</h3><p class="help" style="margin-bottom:10px">Novembre: lettera d'invito alla cena che chiude la stagione ${y} (premiazione e BINGOTROT). Dicembre: lettera di auguri con il calendario gare ${y+1}.</p>
+  const y = stagioneFinita(), a = cen.anno || y, tab = ['lettere','cena','spese','conti'].includes(cen.tab) ? cen.tab : 'cena';
+  const parti = {
+    lettere: () => `<div class="card"><h3>Cena sociale e auguri</h3><p class="help" style="margin-bottom:10px">Novembre: lettera d'invito alla cena che chiude la stagione ${y} (premiazione e BINGOTROT). Dicembre: lettera di auguri con il calendario gare ${y+1}.</p>
     ${menuSezione([['st','lettera','Lettera invito cena',"openCena()",'due modelli tra cui scegliere'],
       ['st','lettera','Buste per i soci',"openBuste()",'110 x 231 mm, da spedire'],
       ['va','coppa',`Classifica generale ${y}`,`go('classifiche',{tipo:'gen',anno:${y}})`,'per la premiazione'],
       ['st','stampa','Stampa i primi 10',`printRaw(htmlTop10(${y}))`,'stagione '+y],
       ['st','lettera','Lettera di auguri',"openAuguri()",'con il calendario '+(y+1)],
       ['st','lettera','Lettera ai fornitori',"openLetteraNatale('fornitori')",'auguri di Natale e grazie'],
-      ['st','lettera','Lettera a chi ci ospita',"openLetteraNatale('ospitanti')","grazie per l'ospitalità"]])}</div>
-  ${boxTabellaCena(cen.anno || y)}
-  ${boxSpeseCena(cen.anno || y)}`;
+      ['st','lettera','Lettera a chi ci ospita',"openLetteraNatale('ospitanti')","grazie per l'ospitalità"]])}</div>`,
+    cena: () => boxTabellaCena(a),
+    spese: () => boxSpeseCena(a),
+    conti: () => boxContiCena(a)};
+  return `<div class="toolbar"><h2>Fine anno</h2></div>
+  ${barraCena(tab)}
+  ${parti[tab]()}`;
 }
 // pagina della lotteria BINGOTROT (dal pulsante arancio in Fine anno)
 function viewBingo(){
@@ -3507,7 +3547,7 @@ function viewBingo(){
   if(lot.estrazione && L.estratti.length) righe.sort((a,b)=>b.presi-a.presi || a.n-b.n);
   const vincenti = righe.filter(r=>r.presi===5), quasi = righe.filter(r=>r.presi===4);
   let h = `<div class="toolbar"><h2>BINGOTROT</h2><span class="muted">&nbsp;lotteria della cena ${y}</span></div>
-  ${menuSezione([['ind','indietro','Torna a Fine anno',"go('fineanno')"]])}
+  ${barraCena('bingo')}
   <div class="card"><div class="toolbar"><h3 style="margin:0 8px 0 0">Lotteria – BINGOTROT</h3><span class="muted">${L.cartelle.length} cartelle</span></div>
     ${menuSezione([['fa'+(lot.prese?' on':''),'spunta',lot.prese?'Chiudi cartelle prese':'Segna cartelle prese',"lot.prese=!lot.prese;lot.estrazione=false;render()",nPrese+' segnate'],
       ['fa'+(lot.estrazione?' on':''),'palline',lot.estrazione?'Chiudi estrazione':'Estrazione',"lot.estrazione=!lot.estrazione;lot.prese=false;render()",'la sera della cena'],
@@ -4529,7 +4569,7 @@ if('serviceWorker' in navigator && location.protocol !== 'file:'){
 // 1) pulsanti e caselle non previsti spariscono (si tiene solo ciò che è nell'elenco qui sotto, il resto no);
 // 2) save() non salva: rimette i dati di prima;
 // 3) la sincronizzazione su iPhone riceve soltanto: l'unica scrittura su Firebase è Sync.modificaSocio.
-const IPHONE_PERMESSI = /^(go\('(home|soci|gare|gara|classifiche|fineanno|bingo|amministrazione|archivio)'|editSocio\('|closeDlg\(|cambiaZoom\(|cambiaAiuto\(|statusClick\(|infoSync\(|Sync\.accedi|soc\.|gar\.chiuse=|cls\.|amm\.vista=|amm\.anno=|cen\.anno=|sceltaStagioneClassifica\()/;
+const IPHONE_PERMESSI = /^(go\('(home|soci|gare|gara|classifiche|fineanno|bingo|amministrazione|archivio)'|editSocio\('|closeDlg\(|cambiaZoom\(|cambiaAiuto\(|statusClick\(|infoSync\(|Sync\.accedi|soc\.|gar\.chiuse=|cls\.|amm\.vista=|amm\.anno=|cen\.anno=|cen\.tab=|sceltaStagioneClassifica\()/;
 function rifiutaIPhone(){
   S = loadLocal(); closeDlg(); render();
   toast('Su iPhone si può cambiare solo la scheda del socio');

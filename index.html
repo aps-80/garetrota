@@ -582,7 +582,7 @@ html.iphone .kv dd{overflow-wrap:anywhere}
 /* ================= DATI ================= */
 // versione del programma (maggiore.minore.correzione), si vede in Archivio e regolamento.
 // Deve essere uguale a VERSIONE in sw.js ("garetrota-" + questo numero).
-const VERSIONE_APP = '1.6.1';
+const VERSIONE_APP = '1.7.0';
 const LS_KEY = 'gareTrota.dati.v1';
 // tablet (schermo da toccare): in pesatura si apre la tastiera con i numeri
 const TABLET = matchMedia('(pointer:coarse)').matches;
@@ -3424,9 +3424,9 @@ function boxSpeseCena(y){
   const sp = speseCena(y);
   return `<div class="card"><div class="toolbar"><h3 style="margin:0 8px 0 0">Spese della cena ${y}</h3><span class="muted small">cena, premi del BINGOTROT e premiazione</span></div>
     ${sp.map(s=>scontrinoHtml(y, s)).join('')}
-    <div class="filters"><button type="button" class="btn primary" onclick="nuovoScontrino(${y})">Aggiungi scontrino</button><button type="button" class="btn" onclick="nuovoScontrino(${y},1)">Spesa senza scontrino</button></div>
+    <div class="filters">${fotoDisponibile() ? `<button type="button" class="btn primary" onclick="fotoApriScontrino(${y})">Scontrino da foto</button>` : ''}<button type="button" class="btn ${fotoDisponibile() ? '' : 'primary'}" onclick="nuovoScontrino(${y})">Aggiungi scontrino a mano</button><button type="button" class="btn" onclick="nuovoScontrino(${y},1)">Spesa senza scontrino</button></div>
     ${sp.length ? totaliSpese(y) : ''}
-    <p class="help">Per ogni scontrino scrivi il negozio e, se vuoi, il totale stampato. Poi scrivi le voci: quelle che non c'entrano si possono lasciare senza spunta in <b>Conta</b> (come barrarle sullo scontrino), oppure non scriverle proprio. Nell'importo puoi scrivere anche una somma, per esempio 11,97+20,93. <b>Per</b> serve solo a vedere quanto va alla cena, al BINGOTROT e alla premiazione: tutto entra nei costi della cena e nel bilancio. Invio passa all'importo e poi alla voce sotto.</p></div>`;
+    <p class="help">Per ogni scontrino scrivi il negozio e, se vuoi, il totale stampato. Poi scrivi le voci: quelle che non c'entrano si possono lasciare senza spunta in <b>Conta</b> (come barrarle sullo scontrino), oppure non scriverle proprio. Nell'importo puoi scrivere anche una somma, per esempio 11,97+20,93. <b>Per</b> serve solo a vedere quanto va alla cena, al BINGOTROT e alla premiazione: tutto entra nei costi della cena e nel bilancio. Invio passa all'importo e poi alla voce sotto.${fotoDisponibile() ? ' Con <b>Scontrino da foto</b> le voci si scrivono da sole: fotografa uno scontrino alla volta, intero e steso, e poi togli la spunta a quelle che non c\'entrano.' : ''}</p></div>`;
 }
 function setCena(y, k, val){
   const s = String(val).trim();
@@ -4199,7 +4199,7 @@ const FOTO_ATTIVA = true;
 const FOTO_URL = 'https://garetrota-foto.djbighouse96.workers.dev'; // indirizzo del Worker (worker-foto)
 // solo per le prove sul PC, con dati inventati: http://localhost/?fotoprova=1
 const FOTO_PROVA = /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /[?&]fotoprova=1/.test(location.search);
-const FOTO_TITOLI = {giudice:'Foglio giudice', pagamenti:'Foglio pagamenti', modulo:'Modulo privacy'};
+const FOTO_TITOLI = {giudice:'Foglio giudice', pagamenti:'Foglio pagamenti', modulo:'Modulo privacy', scontrino:'Scontrino'};
 // collaudo con Azure vero prima dell'accensione: indirizzo del sito con ?fotocollaudo=1, solo con un foglio inventato e senza salvare
 const FOTO_COLLAUDO = /[?&]fotocollaudo=1/.test(location.search);
 function fotoDisponibile(){ return !IPHONE && !!(FOTO_PROVA || ((FOTO_ATTIVA || FOTO_COLLAUDO) && FOTO_URL)); }
@@ -4221,14 +4221,14 @@ function fotoSchermataScatto(avviso){
   const s = fotoS; if(!s) return;
   clearInterval(s.timer); s.controllo = false;
   $('#dlg').classList.remove('fotodlg');
-  const modulo = s.tipo==='modulo';
+  const modulo = s.tipo==='modulo', scontr = s.tipo==='scontrino';
   const senzaRete = !navigator.onLine;
   openDlg('Leggi da foto: '+FOTO_TITOLI[s.tipo], `${avviso?`<div class="alert warn">${esc(avviso)}</div>`:''}
     ${senzaRete?'<div class="alert warn"><b>Manca internet.</b> Per leggere la foto serve internet: puoi farlo più tardi, oppure inserire i dati a mano.</div>':''}
     ${modulo?`<div class="alert info"><b>Da fotografia si leggono solo i moduli con il testo nuovo</b>, quello che nomina i fornitori (Google, Microsoft e Cloudflare). I moduli vecchi, e quelli di chi chiede di non usare la fotografia, si inseriscono a mano con "Nuovo socio".
       <label class="chk" style="margin-top:8px"><input type="checkbox" id="fotoTesto"> Questo modulo ha il testo nuovo e il socio non ha chiesto l'inserimento a mano</label></div>`:''}
-    ${modulo?'':'<div class="alert info"><b>Prima dello scatto:</b> se sul foglio c\'è chi ha chiesto l\'inserimento a mano, copri bene il suo nome a penna. La foto parte intera.</div>'}
-    <p>Inquadra tutto il foglio, il più dritto possibile e con buona luce. La foto viene mandata a Microsoft per la lettura. Poi controlli i valori accanto alla foto: <b>si salva solo dopo la tua conferma</b>.</p>
+    ${modulo||scontr?'':'<div class="alert info"><b>Prima dello scatto:</b> se sul foglio c\'è chi ha chiesto l\'inserimento a mano, copri bene il suo nome a penna. La foto parte intera.</div>'}
+    ${scontr ? GUIDA_FOTO_SCONTRINO : '<p>Inquadra tutto il foglio, il più dritto possibile e con buona luce. La foto viene mandata a Microsoft per la lettura. Poi controlli i valori accanto alla foto: <b>si salva solo dopo la tua conferma</b>.</p>'}
     <div class="btnrow"><label class="btn primary big" style="cursor:pointer">Scatta la foto<input type="file" accept="image/*" capture="environment" style="display:none" onchange="fotoScelta(this)"></label>
     <label class="btn big" style="cursor:pointer">Scegli un file<input type="file" accept="image/*" style="display:none" onchange="fotoScelta(this)"></label></div>`, null);
 }
@@ -4285,10 +4285,10 @@ async function fotoInvia(){
   else { try{ token = Sync.token ? await Sync.token() : null; }catch(e){ console.warn(e); } }
   if(fotoS!==s) return;
   if(!token) return fotoErrore('Per leggere le foto devi accedere con Google.');
-  fotoAttesa('Sto leggendo il foglio: ci vogliono circa 5-10 secondi.');
+  fotoAttesa(`Sto leggendo ${s.tipo==='scontrino' ? 'lo scontrino' : 'il foglio'}: ci vogliono circa 5-10 secondi.`);
   const ctrl = s.ctrl = new AbortController(), tempo = setTimeout(()=>ctrl.abort(), 120000);
   try{
-    const r = await fetch(FOTO_PROVA ? '/leggi' : FOTO_URL.replace(/\/+$/,'')+'/leggi', {method:'POST', headers:{Authorization:'Bearer '+token, 'Content-Type':'image/jpeg'}, body:s.blob, signal:ctrl.signal});
+    const r = await fetch((FOTO_PROVA ? '/leggi' : FOTO_URL.replace(/\/+$/,'')+'/leggi') + (s.tipo==='scontrino' ? '?tipo=scontrino' : ''), {method:'POST', headers:{Authorization:'Bearer '+token, 'Content-Type':'image/jpeg'}, body:s.blob, signal:ctrl.signal});
     const j = await r.json().catch(()=>({}));
     if(fotoS!==s) return;
     if(r.status===429) return fotoErrore('Il servizio gratuito legge poche foto al minuto e per ora ha raggiunto il limite. Basta aspettare un po\'.', j.attesa||40);
@@ -4298,6 +4298,7 @@ async function fotoInvia(){
     if(r.status===422) return fotoErrore('Il servizio non è riuscito a leggere questa foto: fanne un\'altra.');
     if(!r.ok || !j.analyzeResult) return fotoErrore('Il servizio di lettura non risponde. Riprova tra poco.');
     s.ar = j.analyzeResult;
+    if(s.tipo==='scontrino') return fotoControlloScontrino();
     const letto = fotoTipoFoglio(s.ar);
     if(letto!==s.tipo) return fotoSchermataScatto(`Questa foto non sembra il ${FOTO_TITOLI[s.tipo].toLowerCase()}. Controlla il foglio e rifai la foto.`);
     fotoControllo();
@@ -4306,6 +4307,97 @@ async function fotoInvia(){
     console.warn(e);
     fotoErrore('Il collegamento si è interrotto. Controlla internet e riprova.');
   }finally{ clearTimeout(tempo); }
+}
+/* ---- scontrini della cena (1.7.0): Azure prebuilt-receipt dal worker con ?tipo=scontrino ----
+   Azure legge negozio, data, totale e voci stampate; non vede le righe barrate a penna e non mette resi e sconti tra le voci
+   (si prendono dal testo). Le voci arrivano tutte spuntate: chi controlla toglie la spunta a quelle che non c'entrano. */
+const GUIDA_FOTO_SCONTRINO = `<div class="alert info"><b>Come fare la foto dello scontrino</b><ol style="margin:6px 0 0 18px;padding:0">
+  <li><b>Un solo scontrino per foto</b>, e intorno niente altro di scritto (altri scontrini, fogli, appunti): due scontrini nella stessa foto si mescolano.</li>
+  <li><b>Tutto intero</b>, dal nome del negozio in alto fino al totale e alla data.</li>
+  <li><b>Steso e dritto</b>, su un piano liscio e scuro. Se si arrotola, tienilo fermo dai bordi senza coprire le scritte.</li>
+  <li><b>Buona luce</b>, senza l'ombra del telefono e senza riflessi.</li>
+  <li><b>Meglio prima di scriverci sopra</b>: righe barrate e numeri cancellati a penna confondono la lettura. Le voci da non contare le togli dopo, con la spunta.</li></ol></div>
+  <p>La foto viene mandata a Microsoft per la lettura. Poi controlli voci e importi accanto alla foto: <b>lo scontrino si aggiunge solo dopo la tua conferma</b>.</p>`;
+function fotoApriScontrino(y){ fotoPulisci(); fotoS = {tipo:'scontrino', anno:y, zoom:100}; fotoSchermataScatto(); }
+function fotoValore(f){ if(!f) return null; if(f.valueCurrency) return f.valueCurrency.amount; return f.valueNumber ?? f.valueDate ?? f.valueString ?? f.content ?? null; }
+function fotoImporto(x){ if(x==null || x==='') return null; if(typeof x==='number') return x; const n = numeroIt(String(x).replace(/[^\d.,-]/g,'')); return isNaN(n) ? null : n; }
+function fotoLeggiScontrino(ar){
+  const doc = (ar.documents || [])[0]; if(!doc) return null;
+  const f = doc.fields || {}, voci = [];
+  ((f.Items && f.Items.valueArray) || []).forEach(it=>{
+    const o = it.valueObject || {}, dubbi = [];
+    let e = fotoImporto(fotoValore(o.TotalPrice));
+    if(e==null){ const p = fotoImporto(fotoValore(o.Price)), q = fotoImporto(fotoValore(o.Quantity));
+      if(p!=null){ e = q ? cent(p * q) : p; dubbi.push('Importo calcolato dal prezzo: controllalo'); } else dubbi.push('Importo non letto: scrivilo guardando la foto'); }
+    else if(o.TotalPrice.confidence!=null && o.TotalPrice.confidence < FOTO_DUBBIO_PAROLA) dubbi.push('Importo incerto');
+    const d = String(fotoValore(o.Description) || '').replace(/\s+/g, ' ').trim();
+    if(!d && e==null) return;
+    voci.push({d, e:e==null ? '' : cent(e), dubbi, poly:(it.boundingRegions || []).map(b=>b.polygon)});
+  });
+  // resi e sconti: nel testo sono una riga con la parola e sotto l'importo negativo (es. "RESO> VARIE" e "-27,65")
+  const righe = String(ar.content || '').split('\n').map(x=>x.trim());
+  righe.forEach((r, i)=>{
+    const m = /^-\s?(\d+[.,]\d{2})$/.exec(r), prima = righe[i-1] || '';
+    if(m && /\b(RESO|RESI|SCONTO|SCONTI|STORNO|ABBUONO|BUONO|PROMO)/i.test(prima)) voci.push({d:prima, e:-numeroIt(m[1]), dubbi:['Reso o sconto letto dal testo: controllalo'], poly:[]});
+  });
+  const data = fotoValore(f.TransactionDate), tot = fotoImporto(fotoValore(f.Total));
+  return {negozio:String(fotoValore(f.MerchantName) || '').replace(/\s+/g, ' ').trim(), data:/^\d{4}-\d\d-\d\d$/.test(data || '') ? data : '',
+    tot:tot==null ? '' : cent(tot), voci};
+}
+function fotoControlloScontrino(){
+  const s = fotoS;
+  if(s.ar.modelId && s.ar.modelId!=='prebuilt-receipt') return fotoErrore('Il servizio di lettura non è ancora aggiornato per gli scontrini: va ripubblicato il worker. Intanto scrivi lo scontrino a mano.');
+  s.sc = fotoLeggiScontrino(s.ar);
+  if(!s.sc || !s.sc.voci.length) return fotoSchermataScatto('In questa foto non trovo le voci di uno scontrino: rifalla seguendo i consigli qui sotto.');
+  const sc = s.sc, v = n => n==='' || n==null ? '' : fmtDec2(n);
+  const righe = sc.voci.map((x, i)=>`<tr ${fotoAttr(x.dubbi, x.poly)}><td class="ctr"><input type="checkbox" name="c_${i}" checked onchange="fotoScontrinoSomma()" aria-label="Conta"></td>
+      <td><input type="text" class="voce" name="d_${i}" value="${esc(x.d)}" autocomplete="off">${x.dubbi.map(t=>`<div class="fotonota">${esc(t)}</div>`).join('')}</td>
+      <td class="num"><input type="text" class="euro" name="e_${i}" inputmode="decimal" autocomplete="off" value="${v(x.e)}" oninput="fotoScontrinoSomma()"></td></tr>`).join('');
+  const corpo = `<p class="small" style="margin:0 0 6px"><b>Togli la spunta</b> alle voci che non c'entrano con la cena e controlla sulla foto quelle in giallo. Lo scontrino si aggiunge solo quando confermi; dopo puoi ancora correggerlo.</p>
+    <div class="filters"><label class="chk">Negozio&nbsp;<input type="text" name="negozio" value="${esc(sc.negozio)}" style="width:170px"></label>
+      <label class="chk">Data&nbsp;<input type="date" name="data" value="${esc(sc.data)}"></label>
+      <label class="chk">Totale €&nbsp;<input type="text" name="tot" inputmode="decimal" value="${v(sc.tot)}" style="width:80px;text-align:right" oninput="fotoScontrinoSomma()"></label>
+      <label class="chk">Voci per&nbsp;<select name="cat">${CAT_SPESA.map(k=>`<option>${k}</option>`).join('')}</select></label></div>
+    <div class="fotoscorri"><table class="tbl spesetab"><thead><tr><th class="ctr">Conta</th><th>Voce</th><th class="num">Euro</th></tr></thead>
+      <tbody onclick="fotoSegna(event)" onfocusin="fotoSegna(event)">${righe}</tbody></table></div>
+    <div id="fotoSomma" style="margin-top:8px"></div>`;
+  fotoCornice('Controlla lo scontrino', corpo, fotoSalvaScontrino, 'Aggiungi lo scontrino');
+  fotoScontrinoSomma();
+}
+// somma delle voci lette confrontata col totale stampato: se non torna, qualche importo è letto male o manca
+function fotoScontrinoConti(){
+  const f = $('#dlgForm'), n = fotoS && fotoS.sc ? fotoS.sc.voci.length : 0;
+  let tutte = 0, conta = 0, errore = false;
+  for(let i=0;i<n;i++){ const t = f['e_'+i].value.trim(), e = t==='' ? 0 : calcolaSomma(t);
+    if(isNaN(e)){ errore = true; continue; } tutte += e; if(f['c_'+i].checked) conta += e; }
+  const tt = f.tot.value.trim(), tot = tt==='' ? null : calcolaSomma(tt);
+  return {tutte:cent(tutte), conta:cent(conta), tot:tot==null || isNaN(tot) ? null : tot, errore};
+}
+function fotoScontrinoSomma(){
+  const b = $('#fotoSomma'); if(!b) return;
+  const c = fotoScontrinoConti(), torna = c.tot!=null && Math.abs(c.tutte - c.tot) < 0.005;
+  b.innerHTML = `${c.errore ? '<div class="alert warn">Un importo non è un numero: correggilo.</div>' : ''}
+    ${c.tot==null ? '<div class="alert warn">Il totale dello scontrino non è stato letto: scrivilo guardando la foto, serve per il controllo.</div>'
+      : torna ? `<div class="alert info">Le voci lette fanno € ${fmtDec2(c.tutte)}: <b>tornano col totale</b> dello scontrino.</div>`
+      : `<div class="alert warn">Le voci lette fanno <b>€ ${fmtDec2(c.tutte)}</b>, il totale dello scontrino è <b>€ ${fmtDec2(c.tot)}</b> (${c.tutte > c.tot ? 'in più' : 'mancano'} € ${fmtDec2(Math.abs(cent(c.tot - c.tutte)))}). Qualche importo è letto male o manca: controlla sulla foto, soprattutto le voci in giallo.</div>`}
+    <p style="margin:6px 0 0"><b>Contano € ${fmtDec2(c.conta)}</b> <span class="muted small">(voci con la spunta)</span></p>`;
+}
+function fotoSalvaScontrino(d){
+  const s = fotoS; if(!s || !s.sc) return;
+  const c = fotoScontrinoConti();
+  if(c.errore){ alert('Un importo non è un numero: correggilo prima di aggiungere lo scontrino.'); return false; }
+  if(c.tot!=null && Math.abs(c.tutte - c.tot) >= 0.005 && !confirm(`Le voci fanno € ${fmtDec2(c.tutte)} ma il totale dello scontrino è € ${fmtDec2(c.tot)}. Aggiungere lo stesso? Potrai correggere dopo nella scheda.`)) return false;
+  const righe = [];
+  s.sc.voci.forEach((x, i)=>{
+    const t = (d['e_'+i] || '').trim(), e = t==='' ? '' : calcolaSomma(t), desc = d['d_'+i] || '';
+    if(!desc && e==='') return;
+    const r = {id:uid(), d:desc, e, cat:d.cat || 'Cena'}; if(!d['c_'+i]) r.no = true; righe.push(r);
+  });
+  const nuovo = {id:uid(), negozio:d.negozio || '', data:d.data || today(), righe, foto:true};
+  if(c.tot!=null) nuovo.tot = c.tot;
+  const cc = contiAnnoCena(s.anno); (cc.spese = cc.spese || []).push(nuovo);
+  save(); cen.tab = 'spese'; render();
+  toast(`Scontrino ${nuovo.negozio || ''} aggiunto: contano € ${fmtDec2(tenutoScontrino(nuovo))}`);
 }
 /* ---- controllo: foto e valori affiancati ---- */
 function fotoCornice(titolo, corpo, onSave, etichetta){

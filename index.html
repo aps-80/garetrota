@@ -600,7 +600,7 @@ html.iphone .kv dd{overflow-wrap:anywhere}
 /* ================= DATI ================= */
 // versione del programma (maggiore.minore.correzione), si vede in Archivio e regolamento.
 // Deve essere uguale a VERSIONE in sw.js ("garetrota-" + questo numero).
-const VERSIONE_APP = '1.9.0';
+const VERSIONE_APP = '1.9.1';
 const LS_KEY = 'gareTrota.dati.v1';
 // tablet (schermo da toccare): in pesatura si apre la tastiera con i numeri
 const TABLET = matchMedia('(pointer:coarse)').matches;
@@ -3166,13 +3166,13 @@ function quotaCena(y){ const c = cenaConti(y); return c.quota!=null && c.quota!=
 function contiCena(y){
   const c = cenaConti(y), t = tabellaCena(y);
   const persone = t ? t.nr : +c.persone || 0, ridotti = t ? t.ridN : 0, ridottiTot = t ? t.ridTot : 0;
-  const nonPaganti = t ? t.nr - t.pag - t.ridN : Math.min(+c.nonPaganti || 0, persone);
+  const nonPaganti = t ? t.nr - t.pag : Math.min(+c.nonPaganti || 0, persone);
   const quota = quotaCena(y), costi = Math.round(((calcolaSomma(c.costi) || 0) + totaleSpese(y).tot) * 100) / 100;
   if(!persone && !costi) return null;
-  // paganti = a quota piena; i ridotti pagano ognuno la sua cifra
-  const paganti = persone - nonPaganti - ridotti, quotePiene = Math.round(paganti * quota * 100) / 100;
+  // paganti = chi paga qualcosa, ridotti compresi: a quota piena sono i paganti meno i ridotti
+  const paganti = persone - nonPaganti, piene = Math.max(0, paganti - ridotti), quotePiene = Math.round(piene * quota * 100) / 100;
   const ricavi = Math.round((quotePiene + ridottiTot) * 100) / 100, offerte = t ? t.off : 0;
-  return {data:dataCena(y), persone, nonPaganti, paganti, quota, quotePiene, ridotti, ridottiTot, ricavi, offerte, costi, risultato:Math.round((ricavi + offerte - costi) * 100) / 100, tabella:!!t};
+  return {data:dataCena(y), persone, nonPaganti, paganti, piene, quota, quotePiene, ridotti, ridottiTot, ricavi, offerte, costi, risultato:Math.round((ricavi + offerte - costi) * 100) / 100, tabella:!!t};
 }
 /* prezzi ridotti (bambini): testo "15+10" = 2 ridotti per € 25. Contano solo le cifre maggiori di zero */
 function ridottiCena(v){
@@ -3182,9 +3182,9 @@ function ridottiCena(v){
   return {n:p.length, tot:Math.round(p.reduce((a,x)=>a + x, 0) * 100) / 100};
 }
 /* pagamento di un socio alla cena: dato = soldi che ha dato, off = parte del resto lasciata in offerta alla società.
-   dovuto = paganti per quota più i ridotti; resto = dato - dovuto - offerta (l'offerta non supera mai quello che avanza) */
+   dovuto = (paganti meno ridotti) per quota, più i ridotti; resto = dato - dovuto - offerta (l'offerta non supera mai quello che avanza) */
 function pagaCena(v, q){
-  const dovuto = Math.round(((+v.pag || 0) * q + ridottiCena(v).tot) * 100) / 100, dato = v.dato!=null && v.dato!=='' ? +v.dato : null;
+  const r = ridottiCena(v), dovuto = Math.round((Math.max(0, (+v.pag || 0) - r.n) * q + r.tot) * 100) / 100, dato = v.dato!=null && v.dato!=='' ? +v.dato : null;
   if(dato==null) return {dovuto, dato:null, manca:0, off:0, resto:0};
   const avanza = Math.max(0, Math.round((dato - dovuto) * 100) / 100), off = Math.min(+v.off || 0, avanza);
   return {dovuto, dato, manca:Math.max(0, Math.round((dovuto - dato) * 100) / 100), off, resto:Math.round((avanza - off) * 100) / 100};
@@ -3239,33 +3239,33 @@ function setCenaSocio(y, id, k, el){
     save(); aggiornaCena(y, id); return;
   }
   if(k==='rid'){
-    // ridotti: una cifra per bambino, col +. I paganti a quota piena calano da soli per farci stare i ridotti
+    // ridotti: una cifra per bambino, col +. Sono compresi nei paganti (NR e paganti non cambiano)
     const I = iscrittiCena(y), v = I[id];
     if(!v || !(+v.nr > 0)){ if(s) alert('Scrivi prima NR: le persone che porta il socio, bambini compresi.'); el.value = el.defaultValue = ''; mostraSomma(el); return; }
     if(s && isNaN(calcolaSomma(s))){ alert('Scrivi il prezzo di ogni bambino col segno +, per esempio 15+10.'); el.value = el.defaultValue; mostraSomma(el); return; }
     const r = ridottiCena({rid:s});
-    if(r.n > +v.nr){ alert(`I ridotti sono ${r.n}, ma NR è ${v.nr}: aumenta prima NR.`); el.value = el.defaultValue; mostraSomma(el); return; }
+    if(r.n > (+v.pag || 0)){ alert(`I ridotti sono ${r.n}, ma i paganti sono ${+v.pag || 0}: i ridotti fanno parte dei paganti. Aumenta prima i paganti.`); el.value = el.defaultValue; mostraSomma(el); return; }
     if(r.n) v.rid = s.replace(/[-+]+$/,''); else delete v.rid;
-    v.pag = Math.min(+v.pag || 0, +v.nr - r.n);
     save(); aggiornaCena(y, id); return;
   }
   if(!Number.isInteger(n) || n<0 || n>99){ alert('Scrivi un numero intero, per esempio 2.'); el.value = el.defaultValue; return; }
   S.settings.cenaConti = S.settings.cenaConti || {};
   const c = S.settings.cenaConti[y] = S.settings.cenaConti[y] || {}, I = c.iscritti = c.iscritti || {}, v = I[id] || {nr:0, pag:0};
   if(k==='nr'){
-    // i paganti partono uguali a NR meno i ridotti; se prima qualcuno non pagava, i non paganti restano quelli
-    const nRid = ridottiCena(v).n, nonPag = Math.max(0, (+v.nr || 0) - (+v.pag || 0) - nRid);
+    // i paganti partono uguali a NR; se prima qualcuno non pagava, i non paganti restano quelli (i ridotti sono tra i paganti)
+    const nRid = ridottiCena(v).n, nonPag = Math.max(0, (+v.nr || 0) - (+v.pag || 0));
     if(!n){
       if((v.dato!=null || v.rid) && !confirm('Questo socio ha già dei ridotti o dei soldi dati: togliendo NR si cancella tutto. Continuare?')){ el.value = el.defaultValue; return; }
       delete I[id];
     } else {
       if(n < nRid){ alert(`Questo socio ha ${nRid} ridotti: NR non può essere meno di ${nRid}.`); el.value = el.defaultValue; return; }
-      I[id] = Object.assign({}, v, {nr:n, pag:Math.max(0, n - nonPag - nRid)});
+      I[id] = Object.assign({}, v, {nr:n, pag:Math.min(n, Math.max(nRid, n - nonPag))});
     }
   } else {
     if(!(+v.nr > 0)){ if(n) alert('Scrivi prima NR: le persone che porta il socio.'); el.value = el.defaultValue = ''; return; }
     const nRid = ridottiCena(v).n;
-    if(n > v.nr - nRid){ alert(`A quota piena sono al massimo ${v.nr - nRid}: NR ${v.nr}${nRid ? ` meno ${nRid} ridotti` : ''}.`); el.value = el.defaultValue; return; }
+    if(n > v.nr){ alert(`I paganti sono al massimo ${v.nr}, quante persone porta.`); el.value = el.defaultValue; return; }
+    if(n < nRid){ alert(`Questo socio ha ${nRid} ridotti, che sono tra i paganti: i paganti sono almeno ${nRid}.`); el.value = el.defaultValue; return; }
     I[id] = Object.assign({}, v, {pag:n});
   }
   save(); aggiornaCena(y, id);
@@ -3291,13 +3291,14 @@ function invioCena(ev, el){
 }
 function totaliCena(y){
   const t = tabellaCena(y) || {soci:0, nr:0, pag:0, ridN:0, ridTot:0, off:0, manca:0, conDato:0, senzaDato:0}, q = quotaCena(y), e = n => '€ ' + fmtDec2(n);
-  const nonPag = t.nr - t.pag - t.ridN, piene = Math.round(t.pag * q * 100) / 100, tot = Math.round((piene + t.ridTot) * 100) / 100;
+  const nonPag = t.nr - t.pag, nPiene = Math.max(0, t.pag - t.ridN), piene = Math.round(nPiene * q * 100) / 100, tot = Math.round((piene + t.ridTot) * 100) / 100;
   return `<table id="cenaTot" class="tbl" style="max-width:520px;margin-top:10px"><tbody>
     <tr><td>Soci iscritti alla cena</td><td class="num">${t.soci}</td></tr>
     <tr><td>Totale NR (persone alla cena)</td><td class="num"><b>${t.nr}</b></td></tr>
-    <tr><td>Paganti a quota piena</td><td class="num">${nonPag > 0 ? `<span class="muted small">${nonPag} non paganti</span>&nbsp; ` : ''}<b>${t.pag}</b></td></tr>
+    <tr><td>Totale paganti</td><td class="num">${nonPag > 0 ? `<span class="muted small">${nonPag} non paganti</span>&nbsp; ` : ''}<b>${t.pag}</b></td></tr>
+    ${t.ridN ? `<tr><td>di cui a prezzo ridotto</td><td class="num">${t.ridN}</td></tr>` : ''}
     <tr><td>Quota a persona</td><td class="num">${e(q)}</td></tr>
-    <tr><td>Quote piene (paganti per quota)</td><td class="num">${e(piene)}</td></tr>
+    <tr><td>Quote piene: ${nPiene} per quota</td><td class="num">${e(piene)}</td></tr>
     <tr><td>Prezzi ridotti (${t.ridN})</td><td class="num">${e(t.ridTot)}</td></tr>
     <tr class="tot" style="font-weight:700"><td>Totale pagamento (quote piene e ridotti)</td><td class="num">${e(tot)}</td></tr>
     <tr><td>Offerte (resto lasciato alla società)</td><td class="num"><b style="color:#1b7a4b">${e(t.off || 0)}</b></td></tr>
@@ -3326,7 +3327,7 @@ function boxTabellaCena(y){
     </tbody></table></div>
     ${totaliCena(y)}
     ${boxCena()}
-    <p class="help"><b>NR</b> = persone che porta il socio, lui compreso. <b>Paganti</b> = a quota piena: parte uguale a NR, abbassalo se qualcuno non paga. In <b>Ridotti</b> scrivi il prezzo di ogni bambino col segno + (per esempio 15+10 = 2 ridotti per € 25; il pulsante + serve se la tastiera non ce l'ha): i paganti a quota piena calano da soli. In <b>Dato</b> scrivi i soldi che ti dà: a fianco esce il resto da ridare; <b>Resto in offerta</b> lo lascia tutto alla società, <b>Offerta libera</b> ti fa scrivere quanto lascia e calcola il resto. Partecipa chi ha NR maggiore di zero; Invio passa al socio sotto. Gli scontrini si scrivono in <b>Spese della cena</b> (pulsante in alto). Nella casella dei costi puoi scrivere altre spese una dopo l'altra col segno +, per esempio 100+25+36+45 (il pulsante + serve se la tastiera del tablet non ha il più). I conti della cena entrano nel bilancio della stagione in Amministrazione.${c.quota==null || c.quota==='' ? ` La quota, se non la scrivi, è quella della lettera d'invito (€ ${fmtDec2(quotaLett)}).` : ''}</p></div>`;
+    <p class="help"><b>NR</b> = persone che porta il socio, lui compreso. <b>Paganti</b> = chi paga, bambini a prezzo ridotto compresi: parte uguale a NR, abbassalo se qualcuno non paga. In <b>Ridotti</b> scrivi il prezzo di ogni bambino che paga meno, col segno + (per esempio NR 5, Paganti 4, Ridotti 15+10: 2 a quota piena e 2 ridotti per € 25; il pulsante + serve se la tastiera non ce l'ha). In <b>Dato</b> scrivi i soldi che ti dà: a fianco esce il resto da ridare; <b>Resto in offerta</b> lo lascia tutto alla società, <b>Offerta libera</b> ti fa scrivere quanto lascia e calcola il resto. Partecipa chi ha NR maggiore di zero; Invio passa al socio sotto. Gli scontrini si scrivono in <b>Spese della cena</b> (pulsante in alto). Nella casella dei costi puoi scrivere altre spese una dopo l'altra col segno +, per esempio 100+25+36+45 (il pulsante + serve se la tastiera del tablet non ha il più). I conti della cena entrano nel bilancio della stagione in Amministrazione.${c.quota==null || c.quota==='' ? ` La quota, se non la scrivi, è quella della lettera d'invito (€ ${fmtDec2(quotaLett)}).` : ''}</p></div>`;
 }
 // titolo del foglio: il luogo della lettera d'invito (senza grassetti, fino alla prima virgola)
 function luogoCena(){
@@ -3353,11 +3354,11 @@ function htmlFoglioCena(y){
         <td class="c">${si && v.rid ? esc(v.rid) : ''}</td><td class="c">${p && p.dato!=null ? fmtDec2(p.dato) : ''}</td><td class="c">${p && p.off ? fmtDec2(p.off) : ''}</td></tr>`; }).join('')}
     <tr class="tot"><td colspan="2">TOTALE ISCRITTI ALLA CENA</td><td class="c">${t.nr || ''}</td><td></td><td class="c">${t.pag || ''}</td><td class="c">${t.ridN ? t.ridN + ' = ' + fmtDec2(t.ridTot) : ''}</td><td></td><td class="c">${t.off ? fmtDec2(t.off) : ''}</td></tr>
     <tr class="tot"><td colspan="7">QUOTA A PERSONA</td><td class="r">${e(q)}</td></tr>
-    <tr class="tot"><td colspan="7">QUOTE PIENE (PAGANTI PER QUOTA)</td><td class="r">${t.pag ? e(Math.round(t.pag * q * 100) / 100) : ''}</td></tr>
+    <tr class="tot"><td colspan="7">QUOTE PIENE (PAGANTI MENO RIDOTTI, PER QUOTA)</td><td class="r">${t.pag ? e(Math.round(Math.max(0, t.pag - t.ridN) * q * 100) / 100) : ''}</td></tr>
     <tr class="tot"><td colspan="7">PREZZI RIDOTTI</td><td class="r">${t.ridTot ? e(t.ridTot) : ''}</td></tr>
-    <tr class="tot"><td colspan="7">TOTALE PAGAMENTO</td><td class="r">${t.pag || t.ridTot ? e(Math.round((t.pag * q + (t.ridTot || 0)) * 100) / 100) : ''}</td></tr>
+    <tr class="tot"><td colspan="7">TOTALE PAGAMENTO</td><td class="r">${t.pag || t.ridTot ? e(Math.round((Math.max(0, t.pag - t.ridN) * q + (t.ridTot || 0)) * 100) / 100) : ''}</td></tr>
     <tr class="tot"><td colspan="7">OFFERTE</td><td class="r">${t.off ? e(t.off) : ''}</td></tr>
-    <tr class="tot"><td colspan="7">TOTALE CON LE OFFERTE</td><td class="r">${t.pag || t.ridTot || t.off ? e(Math.round((t.pag * q + (t.ridTot || 0) + (t.off || 0)) * 100) / 100) : ''}</td></tr></tbody></table></div>`;
+    <tr class="tot"><td colspan="7">TOTALE CON LE OFFERTE</td><td class="r">${t.pag || t.ridTot || t.off ? e(Math.round((Math.max(0, t.pag - t.ridN) * q + (t.ridTot || 0) + (t.off || 0)) * 100) / 100) : ''}</td></tr></tbody></table></div>`;
 }
 function printFoglioCena(y){ printRaw(htmlFoglioCena(y)); }
 /* spese della cena (1.6.0): scontrini di più negozi, voci che contano o escluse (barrate), spese senza scontrino.
@@ -3493,7 +3494,7 @@ function setCena(y, k, val){
 function boxCena(){
   const y = cen.anno || stagioneFinita(), r = contiCena(y), e = n => '€ ' + fmtDec2(n);
   return `<div id="boxCena">${r ? `<table class="tbl" style="max-width:520px;margin-top:8px"><tbody>
-      <tr><td>Ricavi: ${r.paganti} paganti per ${e(r.quota)}</td><td class="num">+ ${e(r.quotePiene)}</td></tr>
+      <tr><td>Ricavi: ${r.piene} a quota piena per ${e(r.quota)}</td><td class="num">+ ${e(r.quotePiene)}</td></tr>
       ${r.ridotti ? `<tr><td>Ricavi: ${r.ridotti} a prezzo ridotto</td><td class="num">+ ${e(r.ridottiTot)}</td></tr>` : ''}
       ${r.offerte ? `<tr><td>Offerte</td><td class="num">+ ${e(r.offerte)}</td></tr>` : ''}
       <tr><td>Costi${totaleSpese(y).n ? ` <span class="muted small">(scontrini € ${fmtDec2(totaleSpese(y).tot)}${calcolaSomma(cenaConti(y).costi) ? ' + altri € ' + fmtDec2(calcolaSomma(cenaConti(y).costi)) : ''})</span>` : ''}</td><td class="num">- ${e(r.costi)}</td></tr>
@@ -3516,10 +3517,10 @@ function htmlContiCena(y){
     <div class="sez">Partecipanti</div><table>${testa}
       ${riga('Partecipanti alla cena', r.persone, '')}
       ${riga('di cui non paganti', r.nonPaganti, '', 'dicui')}
-      ${r.ridotti ? riga('di cui a prezzo ridotto', r.ridotti, '', 'dicui') : ''}
-      ${riga(r.ridotti ? 'Paganti a quota piena' : 'Paganti', r.paganti, '', 'tot')}</table>
+      ${riga('Paganti', r.paganti, '', 'tot')}
+      ${r.ridotti ? riga('di cui a prezzo ridotto', r.ridotti, '', 'dicui') : ''}</table>
     <div class="sez">Conti della cena</div><table>${testa}
-      ${riga(`Ricavi: quote della cena<small>${r.paganti} paganti per ${eur(r.quota)}</small>`, r.paganti, '+ ' + eur(r.quotePiene != null ? r.quotePiene : r.ricavi))}
+      ${(n => riga(`Ricavi: quote della cena<small>${n} ${r.ridotti ? 'a quota piena' : 'paganti'} per ${eur(r.quota)}</small>`, n, '+ ' + eur(r.quotePiene != null ? r.quotePiene : r.ricavi)))(r.piene != null ? r.piene : r.paganti)}
       ${r.ridotti ? riga('Ricavi: prezzi ridotti', r.ridotti, '+ ' + eur(r.ridottiTot)) : ''}
       ${r.offerte ? riga('Offerte<small>resto lasciato alla società</small>', '', '+ ' + eur(r.offerte)) : ''}
       ${voci.length > 1 || sc.length ? voci.map(v=>riga(v.k, '', (v.n < 0 ? '+ ' : '- ') + eur(Math.abs(v.n)), 'dicui')).join('') : ''}

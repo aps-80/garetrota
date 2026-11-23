@@ -219,6 +219,20 @@ legend{font-weight:600;padding:0 6px}
 .usciti span:last-child i{color:#d4f0e4}
 .tbl.premi{margin-bottom:8px}.tbl.premi td{padding:4px 7px;font-size:14px}
 .esiti .vince{background:var(--gold);padding:8px 10px;border-radius:6px;font-weight:700;font-size:16px}
+/* BINGOTROT: cartella vincente. Schermo intero che lampeggia, coriandoli; si chiude toccando */
+#vincita{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);overflow:hidden;cursor:pointer}
+#vincita .vcard{position:relative;z-index:2;text-align:center;padding:28px 44px;border-radius:18px;border:6px solid #c8960c;background:#ffd84d;color:#3a2a00;box-shadow:0 0 60px 10px rgba(255,216,77,.8);animation:vlampo .5s steps(1) infinite,vpulsa 1s ease-in-out infinite;max-width:90vw}
+#vincita .vt1{font-size:54px;font-weight:900;letter-spacing:2px;line-height:1.1}
+#vincita .vt2{font-size:40px;font-weight:800;margin:10px 0 4px}
+#vincita .vt3{font-size:22px;font-weight:600}
+#vincita .vt4{font-size:14px;margin-top:16px;opacity:.75}
+#vincita i{position:absolute;top:-20px;width:12px;height:18px;border-radius:2px;animation:vcade linear infinite}
+@keyframes vlampo{0%{background:#ffd84d}50%{background:#fff}}
+@keyframes vpulsa{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+@keyframes vcade{0%{transform:translateY(0) rotate(0)}100%{transform:translateY(110vh) rotate(720deg)}}
+.tbl.cartelle tr.vinta td{animation:vriga .6s steps(1) 8;background:#ffd84d}
+@keyframes vriga{0%{background:#ffd84d}50%{background:#fff}}
+@media (prefers-reduced-motion:reduce){#vincita .vcard{animation:none}#vincita i{display:none}.tbl.cartelle tr.vinta td{animation:none}}
 /* finestre: il contenuto resta sempre dentro il riquadro bianco e scorre se lo schermo è basso (es. netbook 1024×600) */
 dialog{border:0;border-radius:10px;padding:0;width:640px;max-width:94vw;max-height:94vh;overflow:hidden;box-sizing:border-box;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.3)}
 dialog.larga{width:820px;max-width:calc(94vw / var(--zoom,1))}
@@ -586,7 +600,7 @@ html.iphone .kv dd{overflow-wrap:anywhere}
 /* ================= DATI ================= */
 // versione del programma (maggiore.minore.correzione), si vede in Archivio e regolamento.
 // Deve essere uguale a VERSIONE in sw.js ("garetrota-" + questo numero).
-const VERSIONE_APP = '1.8.0';
+const VERSIONE_APP = '1.9.0';
 const LS_KEY = 'gareTrota.dati.v1';
 // tablet (schermo da toccare): in pesatura si apre la tastiera con i numeri
 const TABLET = matchMedia('(pointer:coarse)').matches;
@@ -3622,7 +3636,30 @@ function viewBingo(){
   </tbody></table></div></div>`;
   return h;
 }
-function segnaEstratto(n){ const L = lotteria(), i = L.estratti.indexOf(n); if(i<0) L.estratti.push(n); else L.estratti.splice(i,1); save(); render(); }
+function segnaEstratto(n){
+  const L = lotteria(), i = L.estratti.indexOf(n);
+  if(i<0) L.estratti.push(n); else L.estratti.splice(i,1);
+  save(); render();
+  if(i>=0) return;
+  // le cartelle completate proprio con questo numero (e che prendono ancora un premio) fanno festa
+  const premi = +L.premi || 0, nuove = ordineVincite().map((v,k)=>Object.assign({premio:k+1}, v))
+    .filter(v=>v.passo===L.estratti.length && (!premi || v.premio<=premi));
+  if(nuove.length) mostraVincita(nuove);
+}
+function mostraVincita(v){
+  const vec = $('#vincita'); if(vec) vec.remove();
+  const colori = ['#e63946','#2a9d8f','#f4a261','#457b9d','#ffd84d','#8e44ad','#2ecc71'];
+  const cor = Array.from({length:60}, (_,k)=>`<i style="left:${(Math.random()*100).toFixed(1)}%;background:${colori[k % colori.length]};animation-duration:${(2.5 + Math.random()*3).toFixed(2)}s;animation-delay:${(-Math.random()*5).toFixed(2)}s"></i>`).join('');
+  const d = document.createElement('div'); d.id = 'vincita';
+  d.innerHTML = `${cor}<div class="vcard"><div class="vt1">BINGOTROT!</div>
+    <div class="vt2">${v.map(x=>'Cartella N° ' + x.n).join('<br>')}</div>
+    <div class="vt3">${v.length > 1 ? 'Vincono pari: ' + v.map(x=>x.premio + '° premio').join(' e ') : v[0].premio + '° premio'} · con il numero ${v[0].numero}</div>
+    <div class="vt4">Tocca per chiudere</div></div>`;
+  d.onclick = ()=>d.remove();
+  document.body.appendChild(d);
+  // nella tabella sotto lampeggia anche la riga della cartella
+  v.forEach(x=>{ const r = [...document.querySelectorAll('.tbl.cartelle tbody tr')].find(tr=>tr.cells[0] && tr.cells[0].textContent.trim()==='N° ' + x.n); if(r) r.classList.add('vinta'); });
+}
 function annullaUltimoEstratto(){ lotteria().estratti.pop(); save(); render(); }
 // vincite in ordine: si ripercorrono i numeri nell'ordine di uscita; vince chi completa per primo i 5 numeri
 // (solo le cartelle prese, se segnate). Cartelle completate con lo stesso numero = "pari"
